@@ -1,0 +1,2360 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Générateur de plaques MultiBin</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b1020;
+    --panel: #121a2c;
+    --panel-2: #0f1626;
+    --line: #243049;
+    --line-soft: #1b2438;
+    --text: #e8edf7;
+    --muted: #93a1bb;
+    --accent: #f59e0b;
+    --accent-soft: rgba(245, 158, 11, .14);
+    --good: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(245, 158, 11, .08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(56, 189, 248, .07), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 22px 64px; }
+  header.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 22px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    background: linear-gradient(145deg, var(--accent), #d97706);
+    color: #17110a; font-weight: 900; font-size: 19px; letter-spacing: -.5px;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, .25);
+  }
+  h1 { margin: 0; font-size: 21px; letter-spacing: -.3px; }
+  .sub { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .top-links { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ghost-link {
+    color: var(--muted); text-decoration: none; font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--line); background: rgba(255,255,255,.02);
+    padding: 8px 12px; border-radius: 10px; transition: .15s;
+  }
+  .ghost-link:hover { color: var(--text); border-color: #33415e; background: rgba(255,255,255,.04); }
+
+  .layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 18px 50px rgba(0,0,0,.28);
+  }
+  .card.pad { padding: 18px; }
+  .card h2 { margin: 0 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); font-weight: 700; }
+  .stack { display: grid; gap: 12px; }
+
+  .field label { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .field label .hint { color: #6d7c99; font-weight: 500; font-size: 11px; }
+  .input {
+    width: 100%; background: #0c1322; color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; font-variant-numeric: tabular-nums;
+    outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  select.input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
+
+  .types { display: grid; gap: 8px; margin-top: 2px; }
+  .type {
+    position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 11px; cursor: pointer; background: #0c1322;
+    transition: .15s;
+  }
+  .type:hover { border-color: #33415e; }
+  .type input { position: absolute; opacity: 0; pointer-events: none; }
+  .type .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #3b4a67; flex: 0 0 auto; margin-top: 2px; transition: .15s; }
+  .type input:checked + .dot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px #0c1322; }
+  .type .txt { display: grid; gap: 2px; }
+  .type .name { font-size: 13.5px; font-weight: 700; }
+  .type .desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  .type:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .static-type { font-size: 13px; font-weight: 700; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #0c1322; }
+  .static-type .muted { font-weight: 500; }
+
+  .check { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .divider { height: 1px; background: var(--line-soft); margin: 4px 0; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn {
+    border: 1px solid var(--line); background: #0c1322; color: var(--text); font-weight: 700;
+    padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 12.5px; transition: .15s;
+  }
+  .btn:hover { border-color: #3a4a69; background: #111a2d; }
+  .btn.primary { background: linear-gradient(145deg, var(--accent), #d97706); border-color: transparent; color: #1a1206; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.full { grid-column: 1 / -1; }
+
+  .main { display: grid; gap: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  .stat { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); }
+  .stat .k { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .stat .v { font-size: 20px; font-weight: 800; letter-spacing: -.4px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+
+  .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .preview-head h2 { margin: 0; }
+  .badge { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 5px 9px; border-radius: 999px; border: 1px solid; }
+  .badge.ok { color: var(--good); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.1); }
+  .badge.warn { color: var(--warn); border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.1); }
+  .badge.bad { color: var(--bad); border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); }
+  .preview { overflow: hidden; border-radius: 12px; background: #0a0f1b; border: 1px solid var(--line-soft); }
+  .preview svg { display: block; width: 100%; height: auto; }
+  #view3dWrap { height: 520px; position: relative; display: grid; place-items: center; }
+  #view3dWrap canvas { display: block; width: 100%; height: 100%; }
+
+  .list-wrap { overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  th { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 700; background: rgba(255,255,255,.015); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: rgba(255,255,255,.02); }
+  .size-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 46px; padding: 2px 8px; border-radius: 7px; font-weight: 800; font-size: 12.5px; color: #0b1020; }
+  .qty { font-weight: 800; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 12px 2px; color: var(--muted); font-size: 12px; }
+  .notice { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 10px; }
+  .notice b { color: var(--text); }
+  .empty { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .dropzone {
+    border: 1.5px dashed #33415e; border-radius: 12px; padding: 16px;
+    background: rgba(245, 158, 11, .03); transition: .15s; display: grid; gap: 10px;
+  }
+  .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone.has-files { border-style: solid; border-color: #2c3a55; background: rgba(255,255,255,.015); }
+  .dz-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .dz-title { font-size: 13.5px; font-weight: 800; }
+  .dz-sub { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+  .dz-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .file-input { display: none; }
+
+  .reqs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .req {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; border: 1px solid var(--line);
+  }
+  .req.ok { color: var(--good); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+  .req.missing { color: var(--warn); border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+  .req .n { color: var(--muted); font-weight: 600; }
+
+  .bed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 4px; }
+  .bed-card { border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; background: #0a0f1b; }
+  .bed-card svg { display: block; width: 100%; height: auto; }
+  .bed-cap { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line-soft); }
+  .bed-cap b { color: var(--text); }
+  .lib-table td { font-size: 12px; padding: 7px 10px; }
+  .lib-table th { padding: 7px 10px; }
+  .lib-table .del { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+  .lib-table .del:hover { color: var(--bad); background: rgba(248,113,113,.1); }
+  .alert { border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; border: 1px solid; }
+  .alert.warn { color: #fde68a; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+  .alert.bad { color: #fecaca; border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.08); }
+  .alert.ok { color: #a7f3d0; border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .progress { height: 4px; background: var(--line-soft); border-radius: 99px; overflow: hidden; display: none; }
+  .progress.on { display: block; }
+  .progress > i { display: block; height: 100%; width: 35%; background: var(--accent); border-radius: 99px; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(330%); } }
+  .print-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 16px);
+    background: #0f1728; border: 1px solid var(--line); color: var(--text);
+    padding: 11px 16px; border-radius: 11px; font-size: 12.5px; font-weight: 600;
+    box-shadow: 0 14px 40px rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media print {
+    body { background: #fff; color: #111; }
+    .wrap { max-width: none; padding: 0; }
+    .layout { grid-template-columns: 1fr; }
+    .card { box-shadow: none; border-color: #ccc; background: #fff; }
+    .config-card, .top-links, .actions, .preview-head .badge { display: none !important; }
+    .stat, th { background: #f4f4f4; }
+    .stat .k, .sub, .muted, .notice, th, .foot { color: #444; }
+    .preview { background: #fff; border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">MB</div>
+      <div>
+        <h1>Générateur de plaques MultiBin</h1>
+        <p class="sub">Tiroir → disposition, liste et 3MF multi-plateaux. Jeu de plaques inclus, aucun import.</p>
+      </div>
+    </div>
+    <div class="top-links">
+      <a class="ghost-link" href="https://www.multiboard.io/generator/plate" target="_blank" rel="noopener">Générateur officiel ↗</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="card pad config-card">
+      <h2>Configuration</h2>
+      <div class="stack">
+        <div class="row2">
+          <div class="field">
+            <label for="w">Largeur <span class="hint">mm</span></label>
+            <input class="input" id="w" type="number" min="50" step="1" value="500">
+          </div>
+          <div class="field">
+            <label for="d">Profondeur <span class="hint">mm</span></label>
+            <input class="input" id="d" type="number" min="50" step="1" value="400">
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="clearance">Jeu total <span class="hint">mm</span></label>
+            <input class="input" id="clearance" type="number" min="0" step="0.5" value="2">
+          </div>
+          <div class="field">
+            <label for="maxSize">Taille max <span class="hint">CU</span></label>
+            <select class="input" id="maxSize">
+              <option value="10">10 CU — 500 mm</option>
+              <option value="9">9 CU — 450 mm</option>
+              <option value="8">8 CU — 400 mm</option>
+              <option value="7">7 CU — 350 mm</option>
+              <option value="6">6 CU — 300 mm</option>
+              <option value="5">5 CU — 250 mm</option>
+              <option value="4">4 CU — 200 mm</option>
+              <option value="3">3 CU — 150 mm</option>
+              <option value="2">2 CU — 100 mm</option>
+              <option value="1">1 CU — 50 mm</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="ptype">Type de plaque <span class="hint">jeu inclus</span></label>
+          <select class="input" id="ptype">
+            <option value="square">Square Plate — 2×1 → 10×10</option>
+            <option value="base">Base Plate — 2×2 → 10×10</option>
+            <option value="lite">Lite Panel — 2×2 → 10×10</option>
+          </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <label class="check"><input type="checkbox" id="centered" checked> Centrer la grille dans le tiroir</label>
+        <label class="check"><input type="checkbox" id="symmetric"> Symétrie (petites plaques au centre)</label>
+        <label class="check"><input type="checkbox" id="edgeFill"> Plaques de bord étendues (grille continue)</label>
+        <label class="check"><input type="checkbox" id="showClips" checked> Estimer les Dual Clips</label>
+
+        <div class="field">
+          <label for="clipDensity">Clips / CU <span class="hint">jonction · 1 CU = 50 mm</span></label>
+          <select class="input" id="clipDensity">
+            <option value="0.5">0,5</option>
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2 style="margin:0 0 2px">Plateau d'impression</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="bedX">X <span class="hint">mm</span></label>
+            <input class="input" id="bedX" type="number" min="50" step="1" value="350">
+          </div>
+          <div class="field">
+            <label for="bedY">Y <span class="hint">mm</span></label>
+            <input class="input" id="bedY" type="number" min="50" step="1" value="350">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="bedZ">Z <span class="hint">mm</span></label>
+            <input class="input" id="bedZ" type="number" min="10" step="1" value="350">
+          </div>
+          <div class="field">
+            <label for="bedMargin">Marge <span class="hint">mm</span></label>
+            <input class="input" id="bedMargin" type="number" min="0" step="0.5" value="5">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="gap">Espacement <span class="hint">mm</span></label>
+            <input class="input" id="gap" type="number" min="0" step="0.5" value="3">
+          </div>
+          <div class="field">
+            <label for="autoRotate">Rotation <span class="hint">auto</span></label>
+            <select class="input" id="autoRotate">
+              <option value="1" selected>90° autorisée</option>
+              <option value="0">Aucune</option>
+            </select>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="limitToBed" checked> Limiter les plaques au plateau</label>
+
+        <div class="divider"></div>
+
+        <div class="actions">
+          <button class="btn" id="resetBtn" type="button">Réinitialiser</button>
+          <button class="btn" id="printBtn" type="button">Imprimer</button>
+          <button class="btn full primary" id="copyBtn" type="button">Copier la liste</button>
+          <button class="btn full" id="csvBtn" type="button">Télécharger en CSV</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="stats">
+        <div class="stat"><div class="k">Grille</div><div class="v" id="statGrid">—</div></div>
+        <div class="stat"><div class="k">Plaques</div><div class="v" id="statCount">—</div></div>
+        <div class="stat"><div class="k">Reste</div><div class="v" id="statLeft">—</div></div>
+        <div class="stat"><div class="k">Couverture</div><div class="v" id="statCov">—</div></div>
+      </section>
+
+      <section class="card pad">
+        <div class="preview-head">
+          <h2>Aperçu de la disposition</h2>
+          <span class="badge ok" id="fitBadge">—</span>
+        </div>
+        <div class="preview" id="preview"></div>
+        <p class="notice" id="notice">Les cotes sont les dimensions intérieures du tiroir. 1 CU = 50 mm ; les plaques sont posées bord à bord.</p>
+      </section>
+
+      <section class="card pad" id="view3dCard">
+        <div class="preview-head">
+          <h2>Aperçu 3D (STL réels)</h2>
+          <button class="btn" id="view3dBtn" type="button">Afficher la vue 3D</button>
+        </div>
+        <div class="preview" id="view3dWrap">
+          <span class="muted" id="view3dMsg">Vue générée à partir des STL chargés, bords continus inclus. Clique sur « Afficher ».</span>
+        </div>
+        <p class="notice">Glisse pour tourner, molette pour zoomer. La vue utilise les maillages réels (pas une image Orca).</p>
+      </section>
+
+      <section class="card pad" id="printCard">
+        <div class="preview-head">
+          <h2>Préparation de l'impression (3MF)</h2>
+          <span class="badge warn" id="printBadge">Connexion…</span>
+        </div>
+
+        <div class="stats" style="margin-bottom:14px">
+          <div class="stat"><div class="k">Plateaux</div><div class="v" id="statBeds">—</div></div>
+          <div class="stat"><div class="k">Plaques</div><div class="v" id="statPieces">—</div></div>
+          <div class="stat"><div class="k">Taille max</div><div class="v" id="statMax">—</div></div>
+          <div class="stat"><div class="k">Pièces prêtes</div><div class="v" id="statStl">—</div></div>
+        </div>
+
+        <div class="stack">
+          <div class="server-panel">
+            <div class="dz-head">
+              <div>
+                <div class="dz-title">Jeu de pièces <span class="muted" id="serverState">connexion…</span></div>
+                <div class="dz-sub">Toutes les tailles <b id="setInfo">Square Plate 2×1 → 10×10</b> sont incluses. Les pièces nécessaires à ce tiroir sont chargées automatiquement depuis le serveur local — aucun import.</div>
+              </div>
+              <div class="dz-actions">
+                <a class="ghost-link" href="https://www.multiboard.io/generator/plate" target="_blank" rel="noopener">Source des pièces ↗</a>
+              </div>
+            </div>
+            <div class="reqs" id="reqs"></div>
+            <div class="alert warn" id="autoStatus">Chargement…</div>
+            <div class="progress" id="progress"><i></i></div>
+          </div>
+
+          <div class="print-actions">
+            <button class="btn primary" id="export3mf" type="button" disabled>Télécharger le 3MF multi-plateaux</button>
+            <span class="muted" id="exportHint">—</span>
+          </div>
+
+          <div class="bed-grid" id="beds"></div>
+
+          <p class="notice">
+            3MF au format projet Bambu Studio / OrcaSlicer : un seul fichier, plusieurs plateaux. Le 3MF n’impose pas le profil imprimante : sélectionne le bon profil (Qidi) dans Orca ; le plateau saisi doit correspondre à celui du profil.
+            Toutes les pièces <b>Square Plate 2×1 → 10×10</b> et <b>Base Plate / Lite Panel 2×2 → 10×10</b> sont incluses et chargées automatiquement depuis le serveur local : aucun import. Les plaques de bord sont imprimées avec la grille continue et un bord fin, en un seul volume.
+          </p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="preview-head" style="padding:18px 18px 0">
+          <h2>Liste des plaques à imprimer</h2>
+          <span class="muted" id="typeLabel">Square Plate</span>
+        </div>
+        <div class="list-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Taille (CU)</th>
+                <th>Dimensions (mm)</th>
+                <th class="num">Quantité</th>
+                <th class="num">Surface</th>
+              </tr>
+            </thead>
+            <tbody id="partsBody"></tbody>
+          </table>
+        </div>
+        <div class="foot">
+          <span id="partsFoot">—</span>
+          <span id="clipsFoot">—</span>
+        </div>
+        <div id="extWrap" style="display:none; border-top:1px solid var(--line-soft)">
+          <div class="preview-head" style="padding:14px 18px 0">
+            <h2>Plaques de bord étendues</h2>
+            <span class="muted" id="extFoot">—</span>
+          </div>
+          <div class="list-wrap">
+            <table>
+              <thead><tr><th>Plaque</th><th>Dimensions finales</th><th class="num">Quantité</th><th>Bord</th></tr></thead>
+              <tbody id="extBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="notice" style="padding:0 18px 16px">
+          <b>Hypothèses :</b> plaque = <span id="unitNote">50</span> mm par CU, bords jointifs, cotes intérieures du tiroir.
+          Les Dual Clips sont une <b>estimation</b> (1 clip par segment de CU sur une jonction) — vérifie la quantité selon ton montage.
+          Les plaques non carrées peuvent être tournées de 90°.
+        </p>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const STORAGE_KEY = "multibin-square-plate-generator-v1";
+
+  const TYPES = {
+    square: { label: "Square Plate", color: "#f59e0b" },
+    base: { label: "Base Plate", color: "#38bdf8" },
+    lite: { label: "Lite Panel", color: "#34d399" }
+  };
+
+  const el = {
+    w: document.getElementById("w"),
+    d: document.getElementById("d"),
+    clearance: document.getElementById("clearance"),
+    maxSize: document.getElementById("maxSize"),
+    ptype: document.getElementById("ptype"),
+    centered: document.getElementById("centered"),
+    symmetric: document.getElementById("symmetric"),
+    edgeFill: document.getElementById("edgeFill"),
+    showClips: document.getElementById("showClips"),
+    clipDensity: document.getElementById("clipDensity"),
+    preview: document.getElementById("preview"),
+    partsBody: document.getElementById("partsBody"),
+    partsFoot: document.getElementById("partsFoot"),
+    clipsFoot: document.getElementById("clipsFoot"),
+    extWrap: document.getElementById("extWrap"),
+    extBody: document.getElementById("extBody"),
+    extFoot: document.getElementById("extFoot"),
+    statGrid: document.getElementById("statGrid"),
+    statCount: document.getElementById("statCount"),
+    statLeft: document.getElementById("statLeft"),
+    statCov: document.getElementById("statCov"),
+    fitBadge: document.getElementById("fitBadge"),
+    typeLabel: document.getElementById("typeLabel"),
+    notice: document.getElementById("notice"),
+    unitNote: document.getElementById("unitNote"),
+    bedX: document.getElementById("bedX"),
+    bedY: document.getElementById("bedY"),
+    bedZ: document.getElementById("bedZ"),
+    bedMargin: document.getElementById("bedMargin"),
+    gap: document.getElementById("gap"),
+    autoRotate: document.getElementById("autoRotate"),
+    limitToBed: document.getElementById("limitToBed"),
+    statBeds: document.getElementById("statBeds"),
+    statPieces: document.getElementById("statPieces"),
+    statMax: document.getElementById("statMax"),
+    statStl: document.getElementById("statStl"),
+    printBadge: document.getElementById("printBadge"),
+    reqs: document.getElementById("reqs"),
+    autoStatus: document.getElementById("autoStatus"),
+    serverState: document.getElementById("serverState"),
+    setInfo: document.getElementById("setInfo"),
+    progress: document.getElementById("progress"),
+    export3mf: document.getElementById("export3mf"),
+    exportHint: document.getElementById("exportHint"),
+    beds: document.getElementById("beds"),
+    view3dBtn: document.getElementById("view3dBtn"),
+    view3dWrap: document.getElementById("view3dWrap"),
+    view3dMsg: document.getElementById("view3dMsg"),
+    toast: document.getElementById("toast")
+  };
+
+  let state = loadState();
+  let lastResult = null;
+  let lastPack = null;
+  let lastRequired = [];
+  const libraries = { square: new Map(), base: new Map(), lite: new Map() };
+  let autoLoading = false;
+  let exporting = false;
+  let autoTimer = null;
+  const autoManifests = { square: null, base: null, lite: null };
+  const autoUnavailable = { square: false, base: false, lite: false };
+  const autoFail = new Set();
+
+  function loadState() {
+    const defaults = {
+      width: 500,
+      depth: 400,
+      clearance: 2,
+      maxSize: 6,
+      unit: 50,
+      type: "square",
+      centered: true,
+      symmetric: false,
+      edgeFill: false,
+      showClips: true,
+      clipDensity: 1,
+      bedX: 350,
+      bedY: 350,
+      bedZ: 350,
+      bedMargin: 5,
+      gap: 3,
+      autoRotate: true,
+      limitToBed: true
+    };
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaults;
+      return Object.assign(defaults, JSON.parse(raw));
+    } catch (e) {
+      return defaults;
+    }
+  }
+
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function readInputs() {
+    state.width = clampNumber(el.w.value, 50, 20000, 500);
+    state.depth = clampNumber(el.d.value, 50, 20000, 400);
+    state.clearance = clampNumber(el.clearance.value, 0, 200, 2);
+    state.maxSize = clampNumber(el.maxSize.value, 1, 10, 6);
+    state.unit = 50;
+    state.centered = el.centered.checked;
+    state.symmetric = el.symmetric.checked;
+    state.edgeFill = el.edgeFill.checked;
+    state.showClips = el.showClips.checked;
+    state.clipDensity = clampNumber(el.clipDensity.value, 0.1, 4, 1);
+    state.bedX = clampNumber(el.bedX.value, 50, 2000, 350);
+    state.bedY = clampNumber(el.bedY.value, 50, 2000, 350);
+    state.bedZ = clampNumber(el.bedZ.value, 10, 2000, 350);
+    state.bedMargin = clampNumber(el.bedMargin.value, 0, 100, 5);
+    state.gap = clampNumber(el.gap.value, 0, 50, 3);
+    state.autoRotate = el.autoRotate.value === "1";
+    state.limitToBed = el.limitToBed.checked;
+    state.type = TYPES[el.ptype.value] ? el.ptype.value : "square";
+  }
+
+  function writeInputs() {
+    el.w.value = state.width;
+    el.d.value = state.depth;
+    el.clearance.value = state.clearance;
+    el.maxSize.value = String(state.maxSize);
+    el.centered.checked = state.centered;
+    el.symmetric.checked = state.symmetric;
+    el.edgeFill.checked = state.edgeFill;
+    el.showClips.checked = state.showClips;
+    el.clipDensity.value = String(state.clipDensity);
+    el.bedX.value = state.bedX;
+    el.bedY.value = state.bedY;
+    el.bedZ.value = state.bedZ;
+    el.bedMargin.value = state.bedMargin;
+    el.gap.value = state.gap;
+    el.autoRotate.value = state.autoRotate ? "1" : "0";
+    el.limitToBed.checked = state.limitToBed;
+    el.ptype.value = state.type;
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  function solve(cols, rows, maxSize, minSide) {
+    const rowsN = rows + 1;
+    const colsN = cols + 1;
+    const n = Array.from({ length: colsN }, function () { return new Float64Array(rowsN).fill(Infinity); });
+    const score = Array.from({ length: colsN }, function () { return new Float64Array(rowsN).fill(-Infinity); });
+    const choice = Array.from({ length: colsN }, function () { return new Array(rowsN).fill(null); });
+
+    for (let w = 1; w <= cols; w++) {
+      for (let h = 1; h <= rows; h++) {
+        if (w <= maxSize && h <= maxSize && w >= minSide && h >= minSide && !(w === 1 && h === 1)) {
+          n[w][h] = 1;
+          score[w][h] = (w * h) * (w * h);
+          choice[w][h] = { kind: "piece" };
+        }
+
+        for (let a = 1; a < w; a++) {
+          const left = n[a][h];
+          const right = n[w - a][h];
+          if (left === Infinity || right === Infinity) continue;
+          const candN = left + right;
+          const candScore = score[a][h] + score[w - a][h];
+          if (candN < n[w][h] || (candN === n[w][h] && candScore > score[w][h])) {
+            n[w][h] = candN;
+            score[w][h] = candScore;
+            choice[w][h] = { kind: "v", at: a };
+          }
+        }
+
+        for (let b = 1; b < h; b++) {
+          const top = n[w][b];
+          const bottom = n[w][h - b];
+          if (top === Infinity || bottom === Infinity) continue;
+          const candN = top + bottom;
+          const candScore = score[w][b] + score[w][h - b];
+          if (candN < n[w][h] || (candN === n[w][h] && candScore > score[w][h])) {
+            n[w][h] = candN;
+            score[w][h] = candScore;
+            choice[w][h] = { kind: "h", at: b };
+          }
+        }
+      }
+    }
+
+    if (!Number.isFinite(n[cols][rows])) return null;
+
+    const pieces = [];
+    (function walk(x, y, w, h) {
+      const c = choice[w][h];
+      if (!c) return;
+      if (c.kind === "piece") {
+        pieces.push({ x: x, y: y, w: w, h: h });
+        return;
+      }
+      if (c.kind === "v") {
+        walk(x, y, c.at, h);
+        walk(x + c.at, y, w - c.at, h);
+      } else {
+        walk(x, y, w, c.at);
+        walk(x, y + c.at, w, h - c.at);
+      }
+    })(0, 0, cols, rows);
+
+    return pieces;
+  }
+
+  function symCenter(seq) {
+    const k = seq.length;
+    return k % 2 ? seq[(k - 1) / 2] : Math.min(seq[k / 2 - 1], seq[k / 2]);
+  }
+
+  function symPartitions(n, minSide, maxSize) {
+    const out = [];
+    const seen = new Set();
+    function add(seq) {
+      const key = seq.join(",");
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(seq);
+    }
+    function rec(outer, sum) {
+      const rem = n - 2 * sum;
+      if (rem === 0) add(outer.concat(outer.slice().reverse()));
+      else if (rem >= minSide && rem <= maxSize) add(outer.concat([rem], outer.slice().reverse()));
+      for (let p = minSide; p <= maxSize; p++) {
+        if (sum + 2 * p <= n) rec(outer.concat([p]), sum + p);
+      }
+    }
+    rec([], 0);
+    return out;
+  }
+
+  function solveSymmetric(cols, rows, maxSize, minSide) {
+    function scored(seq) {
+      const center = symCenter(seq);
+      return { seq: seq, center: center, len: seq.length, outer: Math.max(seq[0], seq[seq.length - 1]) };
+    }
+    const cmp = function (a, b) { return (a.center - b.center) || (a.len - b.len) || (b.outer - a.outer); };
+    const cps = symPartitions(cols, minSide, maxSize).map(scored).sort(cmp).slice(0, 200);
+    const rps = symPartitions(rows, minSide, maxSize).map(scored).sort(cmp).slice(0, 200);
+    let best = null;
+    for (let ci = 0; ci < cps.length; ci++) {
+      for (let ri = 0; ri < rps.length; ri++) {
+        const cw = cps[ci].seq;
+        const rh = rps[ri].seq;
+        const pieces = [];
+        let x = 0;
+        for (let i = 0; i < cw.length; i++) {
+          let y = 0;
+          for (let j = 0; j < rh.length; j++) {
+            pieces.push({ x: x, y: y, w: cw[i], h: rh[j] });
+            y += rh[j];
+          }
+          x += cw[i];
+        }
+        if (pieces.some(function (p) { return p.w === 1 && p.h === 1; })) continue;
+        const centerArea = cps[ci].center * rps[ri].center;
+        let minArea = Infinity, maxArea = 0;
+        pieces.forEach(function (p) { const a = p.w * p.h; minArea = Math.min(minArea, a); maxArea = Math.max(maxArea, a); });
+        const s = {
+          pieces: pieces,
+          centerMin: centerArea === minArea ? 1 : 0,
+          centerArea: centerArea,
+          total: pieces.length,
+          maxArea: maxArea
+        };
+        if (!best
+          || s.total < best.total
+          || (s.total === best.total && s.centerMin > best.centerMin)
+          || (s.total === best.total && s.centerMin === best.centerMin && s.centerArea < best.centerArea)
+          || (s.total === best.total && s.centerMin === best.centerMin && s.centerArea === best.centerArea && s.maxArea > best.maxArea)) {
+          best = s;
+        }
+      }
+    }
+    return best ? best.pieces : null;
+  }
+
+  function computeLayout() {
+    const unit = state.unit;
+    const usableW = Math.max(0, state.width - state.clearance);
+    const usableD = Math.max(0, state.depth - state.clearance);
+    const cols = Math.floor(usableW / unit + 1e-9);
+    const rows = Math.floor(usableD / unit + 1e-9);
+    const bedInner = Math.min(state.bedX, state.bedY) - 2 * state.bedMargin;
+    const bedFit = Math.floor(bedInner / unit + 1e-9);
+    const typeMax = 10;
+    const minSide = state.type === "square" ? 1 : 2;
+    const bedCap = state.limitToBed ? Math.max(1, bedFit) : typeMax;
+    const effectiveMax = Math.min(state.maxSize, typeMax, bedCap);
+    const typeCapped = state.maxSize > typeMax;
+    const bedCapped = state.limitToBed && bedFit < Math.min(state.maxSize, typeMax);
+    const capReason = typeCapped ? "type" : (bedCapped ? "bed" : "");
+
+    if (cols < 1 || rows < 1) {
+      return { ok: false, reason: "Le tiroir est trop petit pour une plaque de 1 CU avec ce jeu.", cols: cols, rows: rows, unit: unit };
+    }
+    if (state.limitToBed && bedFit < 1) {
+      return { ok: false, reason: "Le plateau est trop petit pour une plaque de 1 CU avec cette marge.", cols: cols, rows: rows, unit: unit };
+    }
+    if (cols * rows > 60000) {
+      return { ok: false, reason: "Tiroir trop grand pour un calcul instantané (plus de 60 000 cases).", cols: cols, rows: rows, unit: unit };
+    }
+
+    const basePieces = solve(cols, rows, effectiveMax, minSide);
+    const symPieces = state.symmetric && cols <= 30 && rows <= 30 ? solveSymmetric(cols, rows, effectiveMax, minSide) : null;
+    const pieces = symPieces || basePieces;
+    const symmetryOverhead = symPieces ? Math.max(0, symPieces.length - basePieces.length) : 0;
+    if (!pieces || !pieces.length) {
+      return { ok: false, reason: state.type === "square"
+        ? "Aucune disposition sans plaque 1×1 (le générateur officiel ne produit pas de 1×1)."
+        : "Aucune disposition avec des plaques ≥2×2 (Base/Lite ne sont pas générées en 1×N).", cols: cols, rows: rows, unit: unit };
+    }
+
+    const owner = Array.from({ length: cols }, function () { return new Int32Array(rows).fill(-1); });
+    pieces.forEach(function (p, index) {
+      for (let x = p.x; x < p.x + p.w; x++) {
+        for (let y = p.y; y < p.y + p.h; y++) owner[x][y] = index;
+      }
+    });
+
+    let boundaryUnits = 0;
+    const neighborPairs = new Set();
+    for (let x = 0; x < cols; x++) {
+      for (let y = 0; y < rows; y++) {
+        const id = owner[x][y];
+        if (x + 1 < cols && owner[x + 1][y] !== id) {
+          boundaryUnits++;
+          neighborPairs.add(keyPair(id, owner[x + 1][y]));
+        }
+        if (y + 1 < rows && owner[x][y + 1] !== id) {
+          boundaryUnits++;
+          neighborPairs.add(keyPair(id, owner[x][y + 1]));
+        }
+      }
+    }
+
+    const clips = Math.ceil(boundaryUnits * state.clipDensity - 1e-9);
+    const leftoverW = state.width - cols * unit;
+    const leftoverD = state.depth - rows * unit;
+    const offX = state.centered ? leftoverW / 2 : 0;
+    const offY = state.centered ? leftoverD / 2 : 0;
+    const mL = offX, mR = leftoverW - offX, mT = offY, mB = leftoverD - offY;
+    if (state.edgeFill) {
+      pieces.forEach(function (p) {
+        const left = p.x === 0 ? mL : 0;
+        const right = p.x + p.w === cols ? mR : 0;
+        const top = p.y === 0 ? mT : 0;
+        const bottom = p.y + p.h === rows ? mB : 0;
+        if (left + right + top + bottom > 0.05) {
+          const bx = offX + p.x * unit;
+          const by = offY + p.y * unit;
+          const bw = p.w * unit;
+          const bh = p.h * unit;
+          p.ext = {
+            left: left, right: right, top: top, bottom: bottom,
+            bx: bx, by: by, bw: bw, bh: bh,
+            xmm: bx - left, ymm: by - top,
+            wmm: bw + left + right, hmm: bh + top + bottom
+          };
+        }
+      });
+    }
+    return {
+      ok: true,
+      cols: cols,
+      rows: rows,
+      unit: unit,
+      pieces: pieces,
+      boundaryUnits: boundaryUnits,
+      junctions: neighborPairs.size,
+      clips: clips,
+      gridW: cols * unit,
+      gridH: rows * unit,
+      leftoverW: leftoverW,
+      leftoverD: leftoverD,
+      drawerW: state.width,
+      drawerD: state.depth,
+      coverage: state.edgeFill ? 100 : (cols * unit * rows * unit) / (state.width * state.depth) * 100,
+      effectiveMax: effectiveMax,
+      requestedMax: state.maxSize,
+      bedFit: bedFit,
+      capped: effectiveMax < state.maxSize,
+      capReason: capReason,
+      offX: offX,
+      offY: offY,
+      margins: { left: mL, right: mR, top: mT, bottom: mB },
+      edgePieces: pieces.filter(function (p) { return !!p.ext; }),
+      symmetryOverhead: symmetryOverhead
+    };
+  }
+
+  function keyPair(a, b) {
+    return a < b ? a + ":" + b : b + ":" + a;
+  }
+
+  function aggregatePieces(layout, includeEdge) {
+    const map = new Map();
+    layout.pieces.forEach(function (p) {
+      if (p.ext && !includeEdge) return;
+      const a = Math.min(p.w, p.h);
+      const b = Math.max(p.w, p.h);
+      const key = a + "x" + b;
+      if (!map.has(key)) map.set(key, { a: a, b: b, count: 0 });
+      map.get(key).count++;
+    });
+    return Array.from(map.values()).sort(function (p, q) {
+      return (q.a * q.b - p.a * p.b) || (q.b - p.b) || (q.a - p.a);
+    });
+  }
+
+  function paletteFor(area) {
+    const t = Math.min(1, Math.max(0, (area - 1) / 35));
+    const hue = 208 - 185 * t;
+    const sat = 66 + 16 * t;
+    const light = 62 + 4 * t;
+    return {
+      fill: "hsl(" + hue.toFixed(1) + " " + sat.toFixed(1) + "% " + light.toFixed(1) + "%)",
+      stroke: "hsl(" + hue.toFixed(1) + " " + sat.toFixed(1) + "% " + (light - 22).toFixed(1) + "%)"
+    };
+  }
+
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  function renderPreview(layout) {
+    if (!layout.ok) {
+      el.preview.innerHTML = '<div class="empty">' + esc(layout.reason) + '</div>';
+      return;
+    }
+
+    const W = layout.drawerW;
+    const D = layout.drawerD;
+    const unit = layout.unit;
+    const padL = Math.max(70, Math.min(150, W * 0.13));
+    const padT = Math.max(58, Math.min(120, D * 0.15));
+    const padR = Math.max(54, Math.min(120, W * 0.1));
+    const padB = Math.max(46, Math.min(90, D * 0.12));
+    const vbW = W + padL + padR;
+    const vbH = D + padT + padB;
+    const ox = padL + (state.centered ? (W - layout.gridW) / 2 : 0);
+    const oy = padT + (state.centered ? (D - layout.gridH) / 2 : 0);
+
+    const stroke = Math.max(0.7, Math.min(2.2, Math.max(W, D) / 520));
+    const fontBase = Math.max(10, Math.min(30, state.unit * 0.5));
+    const dimFont = Math.max(11, Math.min(26, Math.max(W, D) / 34));
+
+    const parts = [];
+    parts.push('<svg viewBox="0 0 ' + vbW.toFixed(2) + ' ' + vbH.toFixed(2) + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Disposition des plaques">');
+    parts.push('<defs>');
+    parts.push('<pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#243049" stroke-width="1.6"/></pattern>');
+    parts.push('<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#93a1bb"/></marker>');
+    parts.push('<clipPath id="gridClip"><rect x="' + ox + '" y="' + oy + '" width="' + layout.gridW + '" height="' + layout.gridH + '"/></clipPath>');
+    const holeSize = state.type === "lite" ? 38 : 40;
+    const holeOffset = (unit - holeSize) / 2;
+    parts.push('<pattern id="holePat" patternUnits="userSpaceOnUse" width="' + unit + '" height="' + unit + '" patternTransform="translate(' + ox + ',' + oy + ')">');
+    parts.push('<rect x="' + holeOffset + '" y="' + holeOffset + '" width="' + holeSize + '" height="' + holeSize + '" rx="4" fill="#0a0f1b" opacity="0.52"/>');
+    [[0, 0], [unit, 0], [0, unit], [unit, unit]].forEach(function (c) {
+      parts.push('<circle cx="' + c[0] + '" cy="' + c[1] + '" r="2.2" fill="#0a0f1b" opacity="0.52"/>');
+    });
+    parts.push('</pattern>');
+    parts.push('</defs>');
+
+    parts.push('<rect x="' + padL + '" y="' + padT + '" width="' + W + '" height="' + D + '" rx="2" fill="url(#hatch)" opacity="0.55" stroke="#3a4a69" stroke-width="' + stroke + '" vector-effect="non-scaling-stroke"/>');
+    parts.push('<rect x="' + ox + '" y="' + oy + '" width="' + layout.gridW + '" height="' + layout.gridH + '" fill="#0c1424"/>');
+
+    parts.push('<g clip-path="url(#gridClip)">');
+    for (let x = 1; x < layout.cols; x++) {
+      parts.push('<line x1="' + (ox + x * unit) + '" y1="' + oy + '" x2="' + (ox + x * unit) + '" y2="' + (oy + layout.gridH) + '" stroke="#1d2a42" stroke-width="0.6" vector-effect="non-scaling-stroke"/>');
+    }
+    for (let y = 1; y < layout.rows; y++) {
+      parts.push('<line x1="' + ox + '" y1="' + (oy + y * unit) + '" x2="' + (ox + layout.gridW) + '" y2="' + (oy + y * unit) + '" stroke="#1d2a42" stroke-width="0.6" vector-effect="non-scaling-stroke"/>');
+    }
+
+    parts.push('</g>');
+
+    layout.pieces.forEach(function (p) {
+      const ext = p.ext;
+      const ex = ext ? padL + ext.xmm : ox + p.x * unit;
+      const ey = ext ? padT + ext.ymm : oy + p.y * unit;
+      const ew = ext ? ext.wmm : p.w * unit;
+      const eh = ext ? ext.hmm : p.h * unit;
+      const bx = ext ? padL + ext.bx : ex;
+      const by = ext ? padT + ext.by : ey;
+      const bw = ext ? ext.bw : p.w * unit;
+      const bh = ext ? ext.bh : p.h * unit;
+      const pal = paletteFor(p.w * p.h);
+      const gap = Math.min(1.4, unit * 0.018);
+
+      parts.push('<rect x="' + ex + '" y="' + ey + '" width="' + ew + '" height="' + eh + '" fill="' + pal.fill + '"/>');
+      parts.push('<rect x="' + ex + '" y="' + ey + '" width="' + ew + '" height="' + eh + '" fill="url(#holePat)"/>');
+
+      if (ext) {
+        const border = 2.5;
+        const bs = function (x, y, w, h) {
+          if (w > 0.05 && h > 0.05) parts.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + pal.fill + '"/>');
+        };
+        if (ext.top > 0.05) bs(ex, ey, ew, border);
+        if (ext.bottom > 0.05) bs(ex, ey + eh - border, ew, border);
+        if (ext.left > 0.05) bs(ex, ey, border, eh);
+        if (ext.right > 0.05) bs(ex + ew - border, ey, border, eh);
+      }
+      parts.push('<rect x="' + (ex + gap) + '" y="' + (ey + gap) + '" width="' + Math.max(0, ew - gap * 2) + '" height="' + Math.max(0, eh - gap * 2) + '" rx="' + Math.min(2.4, unit * 0.045) + '" fill="none" stroke="' + pal.stroke + '" stroke-width="' + (stroke * 0.75) + '" vector-effect="non-scaling-stroke"/>');
+
+      const fs = Math.min(fontBase, Math.min(bw, bh) * 0.32);
+      if (fs >= 7 && bw > fs * 2.2 && bh > fs * 1.8) {
+        const cx = bx + bw / 2;
+        const cy = by + bh / 2;
+        const showMm = bh > fs * 2.9 && bw > fs * 4.4;
+        const labelW = fs * (String(p.w + '×' + p.h).length * 0.62 + 1.0);
+        const labelH = fs * (showMm ? 2.5 : 1.55);
+        parts.push('<rect x="' + (cx - labelW / 2) + '" y="' + (cy - labelH / 2 + fs * 0.12) + '" width="' + labelW + '" height="' + labelH + '" rx="' + (fs * 0.38) + '" fill="#f8fafc" opacity="0.86"/>');
+        parts.push('<text x="' + cx + '" y="' + (cy - (showMm ? fs * 0.28 : -fs * 0.36)) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="800" fill="#0b1020" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">' + p.w + '×' + p.h + '</text>');
+        if (showMm) {
+          parts.push('<text x="' + cx + '" y="' + (cy + fs * 0.82) + '" text-anchor="middle" font-size="' + (fs * 0.64).toFixed(1) + '" font-weight="600" fill="#0b1020" fill-opacity="0.68" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">' + (p.w * unit) + '×' + (p.h * unit) + '</text>');
+        }
+      }
+    });
+
+    if (!state.edgeFill) parts.push('<rect x="' + ox + '" y="' + oy + '" width="' + layout.gridW + '" height="' + layout.gridH + '" fill="none" stroke="#5b6b89" stroke-width="' + stroke + '" vector-effect="non-scaling-stroke"/>');
+
+    const dimY = padT - Math.max(16, padT * 0.45);
+    parts.push('<line x1="' + padL + '" y1="' + dimY + '" x2="' + (padL + W) + '" y2="' + dimY + '" stroke="#93a1bb" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)" vector-effect="non-scaling-stroke"/>');
+    parts.push('<text x="' + (padL + W / 2) + '" y="' + (dimY - Math.max(6, dimFont * 0.45)) + '" text-anchor="middle" font-size="' + dimFont.toFixed(1) + '" fill="#c8d3e6" font-weight="700">' + round1(W) + ' mm</text>');
+
+    const dimX = padL - Math.max(20, padL * 0.38);
+    parts.push('<line x1="' + dimX + '" y1="' + padT + '" x2="' + dimX + '" y2="' + (padT + D) + '" stroke="#93a1bb" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)" vector-effect="non-scaling-stroke"/>');
+    parts.push('<text x="' + dimX + '" y="' + (padT + D / 2) + '" text-anchor="middle" font-size="' + dimFont.toFixed(1) + '" fill="#c8d3e6" font-weight="700" transform="rotate(-90 ' + dimX + ' ' + (padT + D / 2) + ')">' + round1(D) + ' mm</text>');
+
+    if (layout.leftoverW > 0.5) {
+      const msg = state.edgeFill ? 'jeu comblé par les plaques de bord : ' + round1(layout.leftoverW) + ' mm' : 'jeu / reste largeur : ' + round1(layout.leftoverW) + ' mm';
+      parts.push('<text x="' + (padL + W / 2) + '" y="' + (padT + D + Math.max(12, padB * 0.45)) + '" text-anchor="middle" font-size="' + (dimFont * 0.62).toFixed(1) + '" fill="#fbbf24" font-weight="700">' + msg + '</text>');
+    }
+    if (layout.leftoverD > 0.5) {
+      const rx = padL + W + Math.max(14, padR * 0.45);
+      const msgD = state.edgeFill ? 'comblé par les bords : ' + round1(layout.leftoverD) + ' mm' : 'reste : ' + round1(layout.leftoverD) + ' mm';
+      parts.push('<text x="' + rx + '" y="' + (padT + D / 2) + '" text-anchor="middle" font-size="' + (dimFont * 0.62).toFixed(1) + '" fill="#fbbf24" font-weight="700" transform="rotate(-90 ' + rx + ' ' + (padT + D / 2) + ')">' + msgD + '</text>');
+    }
+
+    parts.push('</svg>');
+    el.preview.innerHTML = parts.join("");
+  }
+
+  function round1(v) {
+    return Math.round(v * 10) / 10;
+  }
+
+  function renderTable(layout) {
+    if (!layout.ok) {
+      el.partsBody.innerHTML = '<tr><td colspan="4" class="empty">' + esc(layout.reason) + '</td></tr>';
+      el.partsFoot.textContent = "—";
+      el.clipsFoot.textContent = "—";
+      return;
+    }
+
+    const rows = aggregatePieces(layout);
+    const unit = layout.unit;
+    el.partsBody.innerHTML = rows.map(function (r) {
+      const pal = paletteFor(r.a * r.b);
+      const area = r.a * unit * r.b * unit / 100;
+      return '<tr>' +
+        '<td><span class="size-chip" style="background:' + pal.fill + '">' + r.a + '×' + r.b + '</span></td>' +
+        '<td>' + (r.a * unit) + ' × ' + (r.b * unit) + ' mm</td>' +
+        '<td class="num"><span class="qty">' + r.count + '</span></td>' +
+        '<td class="num muted">' + formatArea(area) + '</td>' +
+        '</tr>';
+    }).join("");
+
+    const total = layout.pieces.length;
+    const edgeCount = (layout.edgePieces || []).length;
+    const areaCm2 = layout.gridW * layout.gridH / 100;
+    el.partsFoot.innerHTML = '<b>' + total + '</b> plaque' + (total > 1 ? 's' : '') + ' au total' + (edgeCount ? ' (dont ' + edgeCount + ' de bord étendu' + (edgeCount > 1 ? 's' : '') + ')' : '') + ' — ' + formatArea(areaCm2) + ' de grille';
+
+    if (state.showClips) {
+      el.clipsFoot.innerHTML = 'Dual Clips (est.) : <b>' + layout.clips + '</b> <span class="muted">(' + layout.boundaryUnits + ' segments de CU)</span>';
+    } else {
+      el.clipsFoot.textContent = "";
+    }
+  }
+
+  function edgeSides(e) {
+    const sides = [];
+    if (e.left > 0.05) sides.push("gauche");
+    if (e.right > 0.05) sides.push("droite");
+    if (e.top > 0.05) sides.push("haut");
+    if (e.bottom > 0.05) sides.push("bas");
+    return sides.join(" + ");
+  }
+
+  function groupEdgePieces(layout) {
+    const edge = (layout && layout.edgePieces) || [];
+    const map = new Map();
+    edge.forEach(function (p) {
+      const e = p.ext;
+      const key = p.w + "x" + p.h + "|" + round1(e.left) + "|" + round1(e.right) + "|" + round1(e.top) + "|" + round1(e.bottom);
+      if (!map.has(key)) map.set(key, { w: p.w, h: p.h, left: e.left, right: e.right, top: e.top, bottom: e.bottom, wmm: e.wmm, hmm: e.hmm, count: 0 });
+      map.get(key).count++;
+    });
+    return Array.from(map.values()).sort(function (a, b) { return (b.w * b.h - a.w * a.h) || (b.count - a.count); });
+  }
+
+  function renderExtTable(layout) {
+    const edge = (layout && layout.edgePieces) || [];
+    if (!edge.length) {
+      el.extWrap.style.display = "none";
+      return;
+    }
+    el.extBody.innerHTML = groupEdgePieces(layout).map(function (r) {
+      const pal = paletteFor(r.w * r.h);
+      return '<tr>' +
+        '<td><span class="size-chip" style="background:' + pal.fill + '">' + r.w + '×' + r.h + '</span></td>' +
+        '<td>' + round1(r.wmm) + ' × ' + round1(r.hmm) + ' mm</td>' +
+        '<td class="num"><span class="qty">' + r.count + '</span></td>' +
+        '<td class="muted">bord continu ' + edgeSides(r) + '</td>' +
+        '</tr>';
+    }).join("");
+    el.extFoot.textContent = edge.length + " plaque" + (edge.length > 1 ? "s" : "") + " de bord étendue" + (edge.length > 1 ? "s" : "");
+    el.extWrap.style.display = "block";
+  }
+
+  function formatArea(cm2) {
+    if (cm2 >= 10000) return round1(cm2 / 10000) + ' m²';
+    return Math.round(cm2) + ' cm²';
+  }
+
+  function renderStats(layout) {
+    if (!layout.ok) {
+      el.statGrid.textContent = "—";
+      el.statCount.textContent = "—";
+      el.statLeft.textContent = "—";
+      el.statCov.textContent = "—";
+      el.fitBadge.className = "badge bad";
+      el.fitBadge.textContent = "Impossible";
+      return;
+    }
+
+    const edge = layout.edgePieces || [];
+    const filled = state.edgeFill && edge.length > 0;
+    el.statGrid.innerHTML = layout.cols + ' × ' + layout.rows + ' <small>CU · ' + layout.gridW + ' × ' + layout.gridH + ' mm</small>';
+    el.statCount.innerHTML = layout.pieces.length + ' <small>plaques</small>' + (edge.length ? '<br>' + edge.length + ' <small>de bord étendu</small>' : '');
+    const left = filled ? 0 : Math.max(layout.leftoverW, layout.leftoverD);
+    el.statLeft.innerHTML = filled ? '0 <small>mm · comblé</small>' : ((left <= 0.5 ? '0' : round1(left)) + ' <small>mm max</small>');
+    el.statCov.innerHTML = Math.round(layout.coverage) + ' <small>%</small>';
+
+    if (filled) {
+      el.fitBadge.className = "badge ok";
+      el.fitBadge.textContent = "Grille continue";
+    } else if (left <= 0.5) {
+      el.fitBadge.className = "badge ok";
+      el.fitBadge.textContent = "Remplissage parfait";
+    } else {
+      el.fitBadge.className = "badge warn";
+      el.fitBadge.textContent = "Reste " + round1(left) + " mm";
+    }
+  }
+
+  function renderType() {
+    const t = TYPES[state.type] || TYPES.square;
+    document.documentElement.style.setProperty("--accent", t.color);
+    el.typeLabel.textContent = t.label;
+    el.unitNote.textContent = state.unit;
+    if (el.setInfo) {
+      el.setInfo.textContent = state.type === "square" ? "Square Plate 2×1 → 10×10" : t.label + " 2×2 → 10×10";
+    }
+  }
+
+  function sizeKey(a, b) {
+    return Math.min(a, b) + "x" + Math.max(a, b);
+  }
+
+  function sizeParts(key) {
+    const p = key.split("x");
+    return { a: Number(p[0]), b: Number(p[1]) };
+  }
+
+  function getLibrary() {
+    return libraries[state.type] || libraries.square;
+  }
+
+  function requiredSizes(layout) {
+    const map = new Map();
+    layout.pieces.forEach(function (p) {
+      const key = sizeKey(p.w, p.h);
+      if (!map.has(key)) map.set(key, { key: key, count: 0 });
+      map.get(key).count++;
+    });
+    return Array.from(map.values()).sort(function (x, y) {
+      const px = sizeParts(x.key), py = sizeParts(y.key);
+      return (py.a * py.b - px.a * px.b) || (py.b - px.b);
+    });
+  }
+
+  function renderReqs(required) {
+    const lib = getLibrary();
+    el.reqs.innerHTML = required.map(function (r) {
+      const e = lib.get(r.key);
+      const cls = e ? "ok" : "missing";
+      const mark = e ? "✓" : "manquant";
+      const sp = sizeParts(r.key);
+      return '<span class="req ' + cls + '">' + sp.a + '×' + sp.b + ' <span class="n">×' + r.count + ' · ' + mark + '</span></span>';
+    }).join("");
+  }
+
+  function findPosition(bin, item, gap, allowRotate) {
+    let best = null;
+    const orientations = allowRotate && !item.fixed && item.w !== item.h ? [0, 1] : [0];
+    for (let fi = 0; fi < bin.free.length; fi++) {
+      const f = bin.free[fi];
+      for (let oi = 0; oi < orientations.length; oi++) {
+        const rot = orientations[oi];
+        const rw = rot ? item.h : item.w;
+        const rh = rot ? item.w : item.h;
+        const pw = rw + gap;
+        const ph = rh + gap;
+        if (pw > f.w + 1e-6 || ph > f.h + 1e-6) continue;
+        const leftW = f.w - pw;
+        const leftH = f.h - ph;
+        const shortSide = Math.min(leftW, leftH);
+        const longSide = Math.max(leftW, leftH);
+        const score = shortSide * 1000 + longSide;
+        if (!best || score < best.score) best = { x: f.x, y: f.y, w: rw, h: rh, rot: rot, score: score, fi: fi };
+      }
+    }
+    return best;
+  }
+
+  function splitFree(bin, placed, gap) {
+    const p = { x: placed.x, y: placed.y, w: placed.w + gap, h: placed.h + gap };
+    const next = [];
+    for (let i = 0; i < bin.free.length; i++) {
+      const f = bin.free[i];
+      if (p.x >= f.x + f.w || p.x + p.w <= f.x || p.y >= f.y + f.h || p.y + p.h <= f.y) {
+        next.push(f);
+        continue;
+      }
+      if (p.x > f.x) next.push({ x: f.x, y: f.y, w: p.x - f.x, h: f.h });
+      if (p.x + p.w < f.x + f.w) next.push({ x: p.x + p.w, y: f.y, w: f.x + f.w - (p.x + p.w), h: f.h });
+      if (p.y > f.y) next.push({ x: f.x, y: f.y, w: f.w, h: p.y - f.y });
+      if (p.y + p.h < f.y + f.h) next.push({ x: f.x, y: p.y + p.h, w: f.w, h: f.y + f.h - (p.y + p.h) });
+    }
+    const pruned = [];
+    for (let i = 0; i < next.length; i++) {
+      const r = next[i];
+      if (r.w < 0.01 || r.h < 0.01) continue;
+      let contained = false;
+      for (let j = 0; j < next.length; j++) {
+        if (i === j) continue;
+        const q = next[j];
+        if (r.x >= q.x - 1e-6 && r.y >= q.y - 1e-6 && r.x + r.w <= q.x + q.w + 1e-6 && r.y + r.h <= q.y + q.h + 1e-6) {
+          if (r.x > q.x + 1e-6 || r.y > q.y + 1e-6 || r.w < q.w - 1e-6 || r.h < q.h - 1e-6) { contained = true; break; }
+        }
+      }
+      if (!contained) pruned.push(r);
+    }
+    bin.free = pruned;
+  }
+
+  function packOrder(items, binW, binH, gap, allowRotate) {
+    const bins = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      let best = null;
+      for (let bi = 0; bi < bins.length; bi++) {
+        const pos = findPosition(bins[bi], item, gap, allowRotate);
+        if (pos && (!best || pos.score < best.score)) best = Object.assign({ bin: bi }, pos);
+      }
+      if (best) {
+        const bin = bins[best.bin];
+        bin.items.push({ item: item, x: best.x, y: best.y, w: best.w, h: best.h, rot: best.rot });
+        splitFree(bin, best, gap);
+      } else {
+        const bin = { free: [{ x: 0, y: 0, w: binW, h: binH }], items: [] };
+        const pos = findPosition(bin, item, gap, allowRotate);
+        if (!pos) {
+          return { error: "La pièce " + (item.ext ? "extension" : sizeKey(item.a, item.b)) + " (" + (item.w) + "×" + (item.h) + " mm) ne tient pas sur le plateau." };
+        }
+        bins.push(bin);
+        bin.items.push({ item: item, x: pos.x, y: pos.y, w: pos.w, h: pos.h, rot: pos.rot });
+        splitFree(bin, pos, gap);
+      }
+    }
+    let used = 0;
+    bins.forEach(function (b) { b.items.forEach(function (it) { used += it.w * it.h; }); });
+    return { bins: bins, utilization: used / (binW * binH * Math.max(1, bins.length)) };
+  }
+
+  function packAll(layout) {
+    const binW = state.bedX - 2 * state.bedMargin;
+    const binH = state.bedY - 2 * state.bedMargin;
+    if (binW <= 0 || binH <= 0) return { error: "Marge de plateau trop grande." };
+    const items = layout.pieces.map(function (p, i) {
+      return {
+        id: i, a: p.w, b: p.h,
+        w: p.ext ? p.ext.wmm : p.w * state.unit,
+        h: p.ext ? p.ext.hmm : p.h * state.unit,
+        piece: p,
+        fixed: !!p.ext
+      };
+    });
+    const byArea = items.slice().sort(function (x, y) { return (y.w * y.h - x.w * x.h) || (Math.max(y.w, y.h) - Math.max(x.w, x.h)); });
+    const byLong = items.slice().sort(function (x, y) { return (Math.max(y.w, y.h) - Math.max(x.w, x.h)) || (y.w * y.h - x.w * x.h); });
+    const byShort = items.slice().sort(function (x, y) { return (Math.min(y.w, y.h) - Math.min(x.w, x.h)) || (y.w * y.h - x.w * x.h); });
+    const orders = [byArea, byLong, byShort];
+    let best = null;
+    for (let i = 0; i < orders.length; i++) {
+      const res = packOrder(orders[i], binW, binH, state.gap, state.autoRotate);
+      if (res.error) return res;
+      if (!best || res.bins.length < best.bins.length || (res.bins.length === best.bins.length && res.utilization > best.utilization)) best = res;
+    }
+    best.binW = binW;
+    best.binH = binH;
+    return best;
+  }
+
+  function renderBeds(pack) {
+    if (!pack || pack.error) {
+      el.beds.innerHTML = '<div class="alert bad">' + esc(pack ? pack.error : "Impossible de préparer l'impression.") + '</div>';
+      return;
+    }
+    const W = state.bedX;
+    const H = state.bedY;
+    const margin = state.bedMargin;
+    const cards = pack.bins.map(function (bin, idx) {
+      const parts = [];
+      const pad = Math.max(W, H) * 0.025;
+      parts.push('<svg viewBox="' + (-pad) + ' ' + (-pad) + ' ' + (W + pad * 2) + ' ' + (H + pad * 2) + '" xmlns="http://www.w3.org/2000/svg">');
+      parts.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" rx="2" fill="#0a0f1b" stroke="#3a4a69" stroke-width="1.2" vector-effect="non-scaling-stroke"/>');
+      parts.push('<rect x="' + margin + '" y="' + margin + '" width="' + pack.binW + '" height="' + pack.binH + '" fill="none" stroke="#2b3a55" stroke-width="0.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>');
+      bin.items.forEach(function (it) {
+        const x = margin + it.x;
+        const y = margin + it.y;
+        const pal = paletteFor(it.item.a * it.item.b);
+        const gap = Math.min(1.2, Math.min(it.w, it.h) * 0.02);
+        parts.push('<rect x="' + (x + gap / 2) + '" y="' + (y + gap / 2) + '" width="' + Math.max(0, it.w - gap) + '" height="' + Math.max(0, it.h - gap) + '" rx="1.2" fill="' + pal.fill + '" stroke="' + pal.stroke + '" stroke-width="0.9" vector-effect="non-scaling-stroke"/>');
+        const fs = Math.min(15, Math.min(it.w, it.h) * 0.2);
+        if (fs >= 6 && it.w > fs * 2.6 && it.h > fs * 1.8) {
+          parts.push('<text x="' + (x + it.w / 2) + '" y="' + (y + it.h / 2 + fs * 0.36) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="800" fill="#0b1020">' + it.item.a + '×' + it.item.b + '</text>');
+        }
+      });
+      parts.push('</svg>');
+      const used = bin.items.reduce(function (s, it) { return s + it.w * it.h; }, 0);
+      const util = Math.round(used / (pack.binW * pack.binH) * 100);
+      return '<div class="bed-card">' + parts.join("") +
+        '<div class="bed-cap"><span>Plateau <b>' + (idx + 1) + '</b></span><span>' + bin.items.length + ' pièce' + (bin.items.length > 1 ? 's' : '') + ' · ' + util + '%</span></div>' +
+        '</div>';
+    }).join("");
+    el.beds.innerHTML = cards;
+  }
+
+  function renderPrint(layout) {
+    if (!layout.ok) {
+      el.statBeds.textContent = "—";
+      el.statPieces.textContent = "—";
+      el.statMax.textContent = "—";
+      el.statStl.textContent = "—";
+      el.printBadge.className = "badge bad";
+      el.printBadge.textContent = "Impossible";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = layout.reason || "—";
+      el.beds.innerHTML = "";
+      el.reqs.innerHTML = "";
+      el.autoStatus.className = "alert bad";
+      el.autoStatus.textContent = layout.reason || "Configuration invalide.";
+      lastRequired = [];
+      lastPack = null;
+      return;
+    }
+
+    const required = requiredSizes(layout);
+    lastRequired = required;
+    const lib = getLibrary();
+    const ready = required.filter(function (r) { return lib.has(r.key); });
+    const missing = required.filter(function (r) { return !lib.has(r.key); });
+
+    renderReqs(required);
+
+    const pack = packAll(layout);
+    if (!pack.error && pack.bins.length > 36) {
+      pack.error = "Plus de 36 plateaux : réduis le tiroir, augmente la taille des plaques ou le plateau.";
+    }
+    lastPack = pack;
+    renderBeds(pack);
+
+    el.statBeds.innerHTML = pack.error ? "—" : pack.bins.length + ' <small>plateau' + (pack.bins.length > 1 ? 'x' : '') + '</small>';
+    el.statPieces.innerHTML = layout.pieces.length + ' <small>pièces</small>';
+    el.statMax.innerHTML = layout.effectiveMax + ' <small>CU' + (layout.capped ? ' · limité' : '') + '</small>';
+    el.statStl.innerHTML = ready.length + '/' + required.length + ' <small>tailles</small>';
+    const man = autoManifests[state.type];
+    el.serverState.textContent = man ? man.files.length + " tailles disponibles" : "connexion…";
+
+    if (pack.error) {
+      el.printBadge.className = "badge bad";
+      el.printBadge.textContent = "Plateau insuffisant";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = pack.error;
+      el.autoStatus.className = "alert bad";
+      el.autoStatus.textContent = pack.error + " Réduis la taille max, la marge ou augmente le plateau.";
+    } else if (location.protocol === "file:") {
+      el.printBadge.className = "badge bad";
+      el.printBadge.textContent = "Serveur";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = "Ouvre l’app via serve.command.";
+      el.autoStatus.className = "alert bad";
+      el.autoStatus.innerHTML = "Chargement automatique indisponible en <b>file://</b>. Double-clique <b>serve.command</b> (ou lance <code>./serve.sh</code>) puis ouvre <b>http://127.0.0.1:8765</b>.";
+    } else if (autoUnavailable[state.type]) {
+      el.printBadge.className = "badge bad";
+      el.printBadge.textContent = "Serveur";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = "Serveur local introuvable.";
+      el.autoStatus.className = "alert bad";
+      el.autoStatus.innerHTML = "Serveur local introuvable. Double-clique <b>serve.command</b> dans le dossier du projet puis rouvre <b>http://127.0.0.1:8765</b>.";
+    } else if (!man) {
+      el.printBadge.className = "badge warn";
+      el.printBadge.textContent = "Serveur…";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = "Connexion au serveur local…";
+      el.autoStatus.className = "alert warn";
+      el.autoStatus.textContent = "Connexion au serveur local et chargement du jeu de pièces…";
+    } else if (missing.length) {
+      el.printBadge.className = "badge warn";
+      el.printBadge.textContent = autoLoading ? "Chargement…" : "Pièces…";
+      el.export3mf.disabled = true;
+      el.exportHint.textContent = autoLoading ? "Chargement automatique des pièces…" : "Pièces manquantes : " + missing.map(function (r) { return r.key; }).join(", ");
+      el.autoStatus.className = "alert warn";
+      el.autoStatus.textContent = autoLoading ? "Chargement automatique des pièces nécessaires…" : "Certaines pièces ne sont pas disponibles sur le serveur.";
+    } else {
+      el.printBadge.className = "badge ok";
+      el.printBadge.textContent = "Prêt";
+      el.export3mf.disabled = false;
+      el.exportHint.textContent = layout.pieces.length + " plaques" + ((layout.edgePieces || []).length ? " dont " + layout.edgePieces.length + " de bord étendu" : "") + " sur " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+      el.autoStatus.className = "alert ok";
+      el.autoStatus.textContent = "Toutes les pièces nécessaires sont chargées" + ((layout.edgePieces || []).length ? " (bords continus inclus)" : "") + ". Le 3MF utilisera " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+    }
+
+    let notice = "";
+    if (layout.capped) {
+      const why = layout.capReason === "type" ? "ce type de plaque (max 6 CU)" : ("le plateau " + state.bedX + "×" + state.bedY + " mm");
+      notice = "Taille max limitée à " + layout.effectiveMax + " CU par " + why + ".";
+    } else {
+      notice = "Les cotes sont les dimensions intérieures du tiroir. 1 CU = " + state.unit + " mm ; les plaques sont posées bord à bord.";
+    }
+    if (state.symmetric && layout.symmetryOverhead > 0) {
+      notice += " Symétrie : +" + layout.symmetryOverhead + " plaque" + (layout.symmetryOverhead > 1 ? "s" : "") + " par rapport à la disposition optimale.";
+    }
+    el.notice.textContent = notice;
+  }
+
+  let threeViewer = null;
+
+  async function render3D() {
+    if (!lastResult || !lastResult.ok) { toast("Configure d'abord le tiroir"); return; }
+    const lib = getLibrary();
+    const missing = lastResult.pieces.filter(function (p) { return !lib.has(sizeKey(p.w, p.h)); });
+    if (missing.length) {
+      el.view3dWrap.innerHTML = '<div class="alert warn">Les pièces ne sont pas encore chargées. Attends quelques secondes puis réessaie.</div>';
+      return;
+    }
+    el.view3dBtn.disabled = true;
+    el.view3dBtn.textContent = "Préparation de la 3D…";
+    try {
+      el.view3dWrap.innerHTML = '<div class="alert warn">Génération des plaques de bord et préparation de la 3D…</div>';
+      await ensureEdgeMeshes(lastResult);
+      const THREE = await import("./vendor/three.module.js");
+      if (threeViewer) {
+        threeViewer.scene.traverse(function (o) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) o.material.dispose();
+        });
+        threeViewer.ro.disconnect();
+        threeViewer.renderer.dispose();
+        threeViewer.renderer.domElement.remove();
+        threeViewer = null;
+      }
+      const wrap = el.view3dWrap;
+      wrap.innerHTML = "";
+      const width = wrap.clientWidth || 900;
+      const height = wrap.clientHeight || 520;
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(width, height);
+      renderer.setClearColor(0x0a0f1b, 1);
+      wrap.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(42, width / height, 1, 10000);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.58));
+      const light1 = new THREE.DirectionalLight(0xffffff, 1.15);
+      light1.position.set(-1, -2, 3);
+      scene.add(light1);
+      const light2 = new THREE.DirectionalLight(0xffffff, 0.45);
+      light2.position.set(2, 1, 2);
+      scene.add(light2);
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(state.width, state.depth),
+        new THREE.MeshStandardMaterial({ color: 0x0f1728, roughness: 1, metalness: 0 })
+      );
+      floor.position.set(state.width / 2, state.depth / 2, -0.7);
+      scene.add(floor);
+      const grid = [];
+      for (let x = 0; x <= state.width + 0.1; x += 50) grid.push(x, 0, -0.5, x, state.depth, -0.5);
+      for (let y = 0; y <= state.depth + 0.1; y += 50) grid.push(0, y, -0.5, state.width, y, -0.5);
+      scene.add(new THREE.LineSegments(
+        new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(grid, 3)),
+        new THREE.LineBasicMaterial({ color: 0x1d2a42 })
+      ));
+
+      lastResult.pieces.forEach(function (p) {
+        const entry = p.ext ? edgeMeshCache.get(edgeKey(p)) : lib.get(sizeKey(p.w, p.h));
+        if (!entry) return;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(entry.positions, 3));
+        geo.setIndex(new THREE.BufferAttribute(entry.indices, 1));
+        geo.computeVertexNormals();
+        const tcol = Math.min(1, Math.max(0, (p.w * p.h - 1) / 35));
+        const color = new THREE.Color().setHSL((208 - 185 * tcol) / 360, (66 + 16 * tcol) / 100, (62 + 4 * tcol) / 100);
+        const material = new THREE.MeshStandardMaterial({ color: color, metalness: 0.1, roughness: 0.68, side: THREE.DoubleSide });
+        const mesh = new THREE.Mesh(geo, material);
+        const bb = entry.bbox;
+        const cx = (bb.min[0] + bb.max[0]) / 2;
+        const cy = (bb.min[1] + bb.max[1]) / 2;
+        const tx = p.ext ? p.ext.xmm + p.ext.wmm / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
+        const ty = p.ext ? p.ext.ymm + p.ext.hmm / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
+        mesh.position.set(tx - cx, ty - cy, -bb.min[2]);
+        scene.add(mesh);
+      });
+
+      const W = state.width, D = state.depth;
+      const pts = [new THREE.Vector3(0, 0, 0.05), new THREE.Vector3(W, 0, 0.05), new THREE.Vector3(W, D, 0.05), new THREE.Vector3(0, D, 0.05)];
+      scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5b6b89 })));
+
+      const target = new THREE.Vector3(W / 2, D / 2, 0);
+      const startR = Math.max(W, D) * 2.0;
+      let radius = startR, theta = -Math.PI / 2 - 0.55, phi = 0.95;
+      function updateCamera() {
+        const sp = Math.sin(phi), cp = Math.cos(phi);
+        camera.position.set(target.x + radius * sp * Math.cos(theta), target.y + radius * sp * Math.sin(theta), target.z + radius * cp);
+        camera.lookAt(target);
+        renderer.render(scene, camera);
+      }
+      updateCamera();
+
+      let drag = null;
+      renderer.domElement.addEventListener("pointerdown", function (e) {
+        drag = { x: e.clientX, y: e.clientY };
+        renderer.domElement.setPointerCapture(e.pointerId);
+      });
+      renderer.domElement.addEventListener("pointermove", function (e) {
+        if (!drag) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        drag = { x: e.clientX, y: e.clientY };
+        theta -= dx * 0.008;
+        phi = Math.max(0.15, Math.min(1.5, phi - dy * 0.008));
+        updateCamera();
+      });
+      renderer.domElement.addEventListener("pointerup", function () { drag = null; });
+      renderer.domElement.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        radius = Math.max(startR * 0.35, Math.min(startR * 2.5, radius * Math.exp(e.deltaY * 0.001)));
+        updateCamera();
+      }, { passive: false });
+
+      const ro = new ResizeObserver(function () {
+        const nw = wrap.clientWidth, nh = wrap.clientHeight;
+        if (nw && nh) {
+          renderer.setSize(nw, nh);
+          camera.aspect = nw / nh;
+          camera.updateProjectionMatrix();
+          updateCamera();
+        }
+      });
+      ro.observe(wrap);
+      threeViewer = { renderer: renderer, scene: scene, ro: ro };
+    } catch (e) {
+      el.view3dWrap.innerHTML = '<div class="alert bad">Vue 3D impossible : ' + esc(e.message) + '</div>';
+    } finally {
+      el.view3dBtn.disabled = false;
+      el.view3dBtn.textContent = "Rafraîchir la vue 3D";
+    }
+  }
+
+  function update() {
+    readInputs();
+    saveState();
+    renderType();
+    const layout = computeLayout();
+    lastResult = layout;
+    renderStats(layout);
+    renderPreview(layout);
+    renderPrint(layout);
+    renderTable(layout);
+    renderExtTable(layout);
+    scheduleAutoLoad();
+  }
+
+  function currentManifest() {
+    return autoManifests[state.type];
+  }
+
+  function scheduleAutoLoad() {
+    if (!currentManifest() || autoLoading) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(ensureAutoLoaded, 80);
+  }
+
+  async function loadManifest(type) {
+    try {
+      const res = await fetch("stls/" + type + "/manifest.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const man = await res.json();
+      if (!man || man.type !== type || !Array.isArray(man.files)) throw new Error("manifest invalide");
+      autoManifests[type] = man;
+      autoUnavailable[type] = false;
+    } catch (e) {
+      autoUnavailable[type] = true;
+      console.warn("Manifest indisponible :", type, e);
+    }
+  }
+
+  async function initAutoLoad() {
+    if (location.protocol === "file:") return;
+    await Promise.all(Object.keys(autoManifests).map(loadManifest));
+    update();
+  }
+
+  async function ensureAutoLoaded() {
+    const type = state.type;
+    const man = autoManifests[type];
+    if (!man || autoLoading || !lastResult || !lastResult.ok) return;
+    const lib = libraries[type];
+    const missing = lastRequired.filter(function (r) {
+      return !lib.has(r.key) && !autoFail.has(type + ":" + r.key);
+    });
+    if (!missing.length) return;
+    const byKey = new Map();
+    man.files.forEach(function (f) { byKey.set(f.key, f.file); });
+    const todo = missing.filter(function (r) { return byKey.has(r.key); });
+    if (!todo.length) return;
+
+    autoLoading = true;
+    el.progress.classList.add("on");
+    el.autoStatus.className = "alert warn";
+    el.autoStatus.textContent = "Chargement automatique des pièces…";
+
+    for (let i = 0; i < todo.length; i++) {
+      const r = todo[i];
+      const file = byKey.get(r.key);
+      try {
+        el.autoStatus.textContent = "Chargement automatique… " + (i + 1) + "/" + todo.length + " (" + r.key + ")";
+        const res = await fetch("stls/" + type + "/" + encodeURIComponent(file), { cache: "force-cache" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const buf = await res.arrayBuffer();
+        const parsed = /\.mesh$/i.test(file) ? parseMesh(buf) : parseStl(buf);
+        const size = detectSize(parsed.bbox);
+        const key = sizeKey(size.a, size.b);
+        if (!libraries[type].has(key)) {
+          libraries[type].set(key, {
+            key: key,
+            nativeA: size.a,
+            nativeB: size.b,
+            positions: parsed.positions,
+            indices: parsed.indices,
+            triangles: parsed.triangles,
+            bbox: parsed.bbox,
+            name: file
+          });
+        }
+      } catch (e) {
+        autoFail.add(type + ":" + r.key);
+        console.warn("Auto-load impossible :", type, file, e);
+      }
+    }
+    autoLoading = false;
+    el.progress.classList.remove("on");
+    update();
+  }
+
+  function parseMesh(buffer) {
+    const dv = new DataView(buffer);
+    if (buffer.byteLength < 16 || dv.getUint32(0, true) !== 0x314d424d) throw new Error("mesh invalide");
+    const nv = dv.getUint32(4, true);
+    const nt = dv.getUint32(8, true);
+    if (buffer.byteLength < 16 + nv * 12 + nt * 12) throw new Error("mesh tronqué");
+    const positions = new Float32Array(buffer, 16, nv * 3);
+    const indices = new Uint32Array(buffer, 16 + nv * 12, nt * 3);
+    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+    return {
+      positions: positions,
+      indices: indices,
+      triangles: nt,
+      bbox: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] }
+    };
+  }
+
+  function detectSize(bbox) {
+    const unit = state.unit;
+    const w = bbox.max[0] - bbox.min[0];
+    const h = bbox.max[1] - bbox.min[1];
+    const z = bbox.max[2] - bbox.min[2];
+    const a = Math.round(w / unit);
+    const b = Math.round(h / unit);
+    if (a < 1 || b < 1) throw new Error("dimensions trop petites");
+    const tol = Math.max(2, unit * 0.12);
+    if (Math.abs(w - a * unit) > tol || Math.abs(h - b * unit) > tol) {
+      throw new Error("taille non standard (" + round1(w) + "×" + round1(h) + " mm)");
+    }
+    if (z > 40) throw new Error("hauteur " + round1(z) + " mm : ce n'est pas une plaque");
+    return { a: a, b: b, w: w, h: h, z: z };
+  }
+
+  function parseStl(buffer) {
+    const dv = new DataView(buffer);
+    if (buffer.byteLength < 84) throw new Error("fichier trop petit");
+    const n = dv.getUint32(80, true);
+    const binarySize = 84 + n * 50;
+    if (n > 0 && binarySize <= buffer.byteLength && buffer.byteLength - binarySize < 4096) {
+      return parseBinaryStl(dv, n);
+    }
+    return parseAsciiStl(new TextDecoder("utf-8").decode(buffer));
+  }
+
+  function parseBinaryStl(dv, n) {
+    const map = new Map();
+    const flat = [];
+    const indices = new Uint32Array(n * 3);
+    let vi = 0;
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const base = 84 + i * 50 + 12;
+      for (let j = 0; j < 3; j++) {
+        const x = dv.getFloat32(base + j * 12, true);
+        const y = dv.getFloat32(base + j * 12 + 4, true);
+        const z = dv.getFloat32(base + j * 12 + 8, true);
+        const key = x.toFixed(4) + "," + y.toFixed(4) + "," + z.toFixed(4);
+        let id = map.get(key);
+        if (id === undefined) {
+          id = vi++;
+          map.set(key, id);
+          flat.push(x, y, z);
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+        }
+        indices[i * 3 + j] = id;
+      }
+    }
+    return {
+      positions: new Float32Array(flat),
+      indices: indices,
+      triangles: n,
+      bbox: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] }
+    };
+  }
+
+  function parseAsciiStl(text) {
+    const map = new Map();
+    const flat = [];
+    const indices = [];
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    const re = /vertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)/g;
+    let m;
+    let vi = 0;
+    let tri = 0;
+    while ((m = re.exec(text)) !== null) {
+      const x = Number(m[1]), y = Number(m[2]), z = Number(m[3]);
+      const key = x.toFixed(4) + "," + y.toFixed(4) + "," + z.toFixed(4);
+      let id = map.get(key);
+      if (id === undefined) {
+        id = vi++;
+        map.set(key, id);
+        flat.push(x, y, z);
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+      }
+      indices.push(id);
+      if (indices.length % 3 === 0) tri++;
+    }
+    if (!indices.length) throw new Error("aucun triangle lisible");
+    return {
+      positions: new Float32Array(flat),
+      indices: new Uint32Array(indices),
+      triangles: tri,
+      bbox: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] }
+    };
+  }
+
+  function fmtCoord(v) {
+    return Object.is(v, -0) ? "0" : String(v);
+  }
+
+  function xmlEsc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c];
+    });
+  }
+
+  function uuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  function meshXml(entry, id) {
+    const parts = [];
+    parts.push('<?xml version="1.0" encoding="UTF-8"?>');
+    parts.push('<model unit="millimeter" xml:lang="fr-FR" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">');
+    parts.push('<metadata name="Application">Square Plate Generator</metadata>');
+    parts.push('<resources><object id="' + id + '" type="model"><mesh><vertices>');
+    const pos = entry.positions;
+    for (let i = 0; i < pos.length; i += 3) {
+      parts.push('<vertex x="' + fmtCoord(pos[i]) + '" y="' + fmtCoord(pos[i + 1]) + '" z="' + fmtCoord(pos[i + 2]) + '"/>');
+    }
+    parts.push('</vertices><triangles>');
+    const idx = entry.indices;
+    for (let i = 0; i < idx.length; i += 3) {
+      parts.push('<triangle v1="' + idx[i] + '" v2="' + idx[i + 1] + '" v3="' + idx[i + 2] + '"/>');
+    }
+    parts.push('</triangles></mesh></object></resources><build/></model>');
+    return parts.join("");
+  }
+
+  function transformString(rot, tx, ty, tz) {
+    if (rot) return "0 1 0 -1 0 0 0 0 1 " + fmtCoord(tx) + " " + fmtCoord(ty) + " " + fmtCoord(tz);
+    return "1 0 0 0 1 0 0 0 1 " + fmtCoord(tx) + " " + fmtCoord(ty) + " " + fmtCoord(tz);
+  }
+
+  let manifoldPromise = null;
+  const edgeMeshCache = new Map();
+
+  function getManifold() {
+    if (!manifoldPromise) {
+      manifoldPromise = import("./vendor/manifold.js").then(async function (mod) {
+        const wasm = await mod.default({ locateFile: function () { return "./vendor/manifold.wasm"; } });
+        wasm.setup();
+        return wasm;
+      });
+    }
+    return manifoldPromise;
+  }
+
+  function edgeKey(piece) {
+    const e = piece.ext;
+    return "edge:" + state.type + ":" + sizeKey(piece.w, piece.h) + ":" + round1(e.left) + "," + round1(e.right) + "," + round1(e.top) + "," + round1(e.bottom);
+  }
+
+  async function getPlateByKey(type, key) {
+    const lib = libraries[type];
+    if (lib.has(key)) return lib.get(key);
+    let man = autoManifests[type];
+    if (!man) {
+      await loadManifest(type);
+      man = autoManifests[type];
+    }
+    if (!man) throw new Error("Manifest indisponible pour " + type);
+    const info = man.files.find(function (f) { return f.key === key; });
+    if (!info) throw new Error("Taille " + key + " absente du jeu " + type);
+    const res = await fetch("stls/" + type + "/" + encodeURIComponent(info.file), { cache: "force-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status + " pour " + info.file);
+    const buf = await res.arrayBuffer();
+    const parsed = /\.mesh$/i.test(info.file) ? parseMesh(buf) : parseStl(buf);
+    const size = detectSize(parsed.bbox);
+    const k = sizeKey(size.a, size.b);
+    lib.set(k, {
+      key: k,
+      nativeA: size.a,
+      nativeB: size.b,
+      positions: parsed.positions,
+      indices: parsed.indices,
+      triangles: parsed.triangles,
+      bbox: parsed.bbox,
+      name: info.file
+    });
+    return lib.get(k);
+  }
+
+  async function makeEdgeMesh(wasm, piece, key) {
+    const Manifold = wasm.Manifold;
+    const Mesh = wasm.Mesh;
+    const e = piece.ext;
+    const needLeft = e.left > 0.05 ? 1 : 0;
+    const needRight = e.right > 0.05 ? 1 : 0;
+    const needBottom = e.bottom > 0.05 ? 1 : 0;
+    const needTop = e.top > 0.05 ? 1 : 0;
+    const baseKey = sizeKey(piece.w, piece.h);
+    const baseEntry = await getPlateByKey(state.type, baseKey);
+    const bigA = piece.w + needLeft + needRight;
+    const bigB = piece.h + needBottom + needTop;
+    const bigKey = sizeKey(bigA, bigB);
+    const bigEntry = await getPlateByKey(state.type, bigKey);
+
+    const rawBig = new Manifold(new Mesh({
+      numProp: 3,
+      vertProperties: bigEntry.positions,
+      triVerts: bigEntry.indices
+    }));
+    const bb0 = rawBig.boundingBox();
+    const big = rawBig.translate([-bb0.min[0], -bb0.min[1], 0]);
+    rawBig.delete();
+    const bb = big.boundingBox();
+    const t = bb.max[2] - bb.min[2];
+    const z0 = bb.min[2];
+
+    const bw = baseEntry.bbox.max[0] - baseEntry.bbox.min[0];
+    const bh = baseEntry.bbox.max[1] - baseEntry.bbox.min[1];
+    const bigW = bb.max[0] - bb.min[0];
+    const bigH = bb.max[1] - bb.min[1];
+    const ox = needLeft ? (needRight ? (bigW - bw) / 2 : bigW - bw) : 0;
+    const oy = needBottom ? (needTop ? (bigH - bh) / 2 : bigH - bh) : 0;
+    const x0 = ox - e.left;
+    const x1 = ox + bw + e.right;
+    const y0 = oy - e.bottom;
+    const y1 = oy + bh + e.top;
+
+    const cutBox = Manifold.cube([x1 - x0, y1 - y0, t + 2]).translate([x0, y0, z0 - 1]);
+    let cut = Manifold.intersection(big, cutBox);
+    const bwBorder = 2.5;
+    const strips = [];
+    const strip = function (x, y, w, d) {
+      if (w > 0.01 && d > 0.01) strips.push(Manifold.cube([w, d, t]).translate([x, y, z0]));
+    };
+    if (e.top > 0.05) strip(x0, y1 - bwBorder, x1 - x0, bwBorder);
+    if (e.bottom > 0.05) strip(x0, y0, x1 - x0, bwBorder);
+    if (e.left > 0.05) strip(x0, y0, bwBorder, y1 - y0);
+    if (e.right > 0.05) strip(x1 - bwBorder, y0, bwBorder, y1 - y0);
+    const out = strips.length ? Manifold.union([cut].concat(strips)) : cut;
+
+    const mesh = out.getMesh();
+    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    const vp = mesh.vertProperties;
+    for (let i = 0; i < vp.length; i += 3) {
+      const x = vp[i], y = vp[i + 1], z = vp[i + 2];
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+    const entry = {
+      key: key,
+      positions: vp,
+      indices: mesh.triVerts,
+      bbox: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
+      label: baseKey + " + bord"
+    };
+    big.delete();
+    cutBox.delete();
+    cut.delete();
+    strips.forEach(function (s) { s.delete(); });
+    out.delete();
+    return entry;
+  }
+
+  async function ensureEdgeMeshes(layout) {
+    const edge = layout && layout.edgePieces || [];
+    if (!edge.length) return;
+    const wasm = await getManifold();
+    el.progress.classList.add("on");
+    for (let i = 0; i < edge.length; i++) {
+      const p = edge[i];
+      const key = edgeKey(p);
+      if (edgeMeshCache.has(key)) continue;
+      el.autoStatus.className = "alert warn";
+      el.autoStatus.textContent = "Génération des plaques de bord… " + (i + 1) + "/" + edge.length;
+      edgeMeshCache.set(key, await makeEdgeMesh(wasm, p, key));
+    }
+    el.progress.classList.remove("on");
+  }
+
+  function build3mfBlob() {
+    const layout = lastResult;
+    const pack = lastPack;
+    if (!layout || !layout.ok || !pack || pack.error) throw new Error("Préparation 3MF impossible.");
+    const lib = getLibrary();
+    const required = lastRequired;
+    const missing = required.filter(function (r) { return !lib.has(r.key); });
+    if (missing.length) throw new Error("Pièces manquantes : " + missing.map(function (r) { return r.key; }).join(", "));
+
+    const meshIndex = new Map();
+    const meshes = [];
+    const instances = [];
+    let instanceId = 0;
+
+    pack.bins.forEach(function (bin, binIndex) {
+      bin.items.forEach(function (it) {
+        const piece = it.item.piece;
+        const baseKey = sizeKey(piece.w, piece.h);
+        const base = lib.get(baseKey);
+        const key = piece.ext ? edgeKey(piece) : baseKey;
+        const entry = piece.ext ? edgeMeshCache.get(key) : base;
+        if (piece.ext && !entry) throw new Error("Bord non généré : " + key);
+        if (!meshIndex.has(key)) {
+          meshIndex.set(key, meshes.length + 1);
+          meshes.push({ key: key, entry: entry });
+        }
+        instances.push({
+          bin: binIndex,
+          x: it.x,
+          y: it.y,
+          w: it.w,
+          h: it.h,
+          entry: entry,
+          mesh: meshIndex.get(key),
+          ext: !!piece.ext,
+          label: piece.ext ? baseKey + " + bord" : baseKey,
+          wid: 2 + instanceId * 2,
+          identify: instanceId + 1
+        });
+        instanceId++;
+      });
+    });
+
+    const plateCols = Math.ceil(Math.sqrt(pack.bins.length));
+    const bedX = state.bedX;
+    const bedY = state.bedY;
+
+    const wrappers = [];
+    const items = [];
+    const modelObjects = [];
+    const plateMap = pack.bins.map(function () { return []; });
+
+    instances.forEach(function (inst) {
+      const entry = inst.entry;
+      const nativeW = entry.bbox.max[0] - entry.bbox.min[0];
+      const nativeH = entry.bbox.max[1] - entry.bbox.min[1];
+      const cx = (entry.bbox.min[0] + entry.bbox.max[0]) / 2;
+      const cy = (entry.bbox.min[1] + entry.bbox.max[1]) / 2;
+      const minZ = entry.bbox.min[2];
+
+      let rot = 0;
+      if (inst.ext) rot = 0;
+      else if (Math.abs(nativeW - inst.w) <= 1.5 && Math.abs(nativeH - inst.h) <= 1.5) rot = 0;
+      else if (Math.abs(nativeH - inst.w) <= 1.5 && Math.abs(nativeW - inst.h) <= 1.5) rot = 1;
+      else rot = nativeW > nativeH && inst.w < inst.h ? 1 : 0;
+
+      const tx = state.bedMargin + inst.x + inst.w / 2;
+      const ty = state.bedMargin + inst.y + inst.h / 2;
+      let wx, wy;
+      if (rot) {
+        wx = tx + cy;
+        wy = ty - cx;
+      } else {
+        wx = tx - cx;
+        wy = ty - cy;
+      }
+      const tz = -minZ;
+
+      const row = Math.floor(inst.bin / plateCols);
+      const col = inst.bin % plateCols;
+      const ox = col * bedX * 1.2;
+      const oy = -row * bedY * 1.2;
+
+      wrappers.push('<object id="' + inst.wid + '" type="model"><components><component p:path="/3D/Objects/mesh_' + inst.mesh + '.model" objectid="' + inst.mesh + '" p:UUID="' + uuid() + '" transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>');
+      items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(rot, ox + wx, oy + wy, tz) + '" printable="1"/>');
+      modelObjects.push('<object id="' + inst.wid + '"><metadata key="name" value="' + xmlEsc(inst.label) + '"/><metadata key="extruder" value="1"/></object>');
+      plateMap[inst.bin].push(inst);
+    });
+
+    const plates = plateMap.map(function (arr, i) {
+      return '<plate><metadata key="plater_id" value="' + (i + 1) + '"/><metadata key="plater_name" value=""/><metadata key="locked" value="false"/>' +
+        arr.map(function (inst) {
+          return '<model_instance><metadata key="object_id" value="' + inst.wid + '"/><metadata key="instance_id" value="0"/><metadata key="identify_id" value="' + inst.identify + '"/></model_instance>';
+        }).join("") + '</plate>';
+    }).join("");
+
+    const model = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<model unit="millimeter" xml:lang="fr-FR" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">' +
+      '<metadata name="Application">Square Plate Generator</metadata>' +
+      '<metadata name="BambuStudio:3mfVersion">1</metadata>' +
+      '<resources>' + wrappers.join("") + '</resources>' +
+      '<build p:UUID="' + uuid() + '">' + items.join("") + '</build>' +
+      '</model>';
+
+    const settings = '<?xml version="1.0" encoding="UTF-8"?><config>' + modelObjects.join("") + plates + '</config>';
+    const contentTypes = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>' +
+      '</Types>';
+    const rootRels = '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>' +
+      '</Relationships>';
+
+    const entries = [];
+    entries.push({ name: "[Content_Types].xml", data: contentTypes });
+    entries.push({ name: "_rels/.rels", data: rootRels });
+    entries.push({ name: "3D/3dmodel.model", data: model });
+    entries.push({ name: "Metadata/model_settings.config", data: settings });
+
+    const rels = ['<?xml version="1.0" encoding="UTF-8"?>', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'];
+    meshes.forEach(function (m, i) {
+      entries.push({ name: "3D/Objects/mesh_" + (i + 1) + ".model", data: meshXml(m.entry, i + 1) });
+      rels.push('<Relationship Target="/3D/Objects/mesh_' + (i + 1) + '.model" Id="rel-' + (i + 2) + '" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>');
+    });
+    rels.push('</Relationships>');
+    entries.push({ name: "3D/_rels/3dmodel.model.rels", data: rels.join("") });
+
+    return { entries: entries, plates: pack.bins.length };
+  }
+
+  async function zipEntries(entries) {
+    const enc = new TextEncoder();
+    const chunks = [];
+    const central = [];
+    let offset = 0;
+    const canDeflate = typeof CompressionStream !== "undefined";
+
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const nameBytes = enc.encode(e.name);
+      const data = typeof e.data === "string" ? enc.encode(e.data) : e.data;
+      const crc = crc32(data);
+      let method = 0;
+      let payload = data;
+      if (canDeflate && data.length > 256) {
+        try {
+          const cs = new CompressionStream("deflate-raw");
+          const stream = new Blob([data]).stream().pipeThrough(cs);
+          const ab = await new Response(stream).arrayBuffer();
+          if (ab.byteLength < data.length) { payload = new Uint8Array(ab); method = 8; }
+        } catch (err) {}
+      }
+
+      const local = new Uint8Array(30 + nameBytes.length);
+      const dv = new DataView(local.buffer);
+      dv.setUint32(0, 0x04034b50, true);
+      dv.setUint16(4, 20, true);
+      dv.setUint16(6, 0x0800, true);
+      dv.setUint16(8, method, true);
+      dv.setUint16(10, 0, true);
+      dv.setUint16(12, 0x21, true);
+      dv.setUint32(14, crc, true);
+      dv.setUint32(18, payload.length, true);
+      dv.setUint32(22, data.length, true);
+      dv.setUint16(26, nameBytes.length, true);
+      dv.setUint16(28, 0, true);
+      local.set(nameBytes, 30);
+      chunks.push(local);
+      chunks.push(payload);
+
+      const cen = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(cen.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true);
+      cv.setUint16(10, method, true);
+      cv.setUint16(12, 0, true);
+      cv.setUint16(14, 0x21, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, payload.length, true);
+      cv.setUint32(24, data.length, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint16(30, 0, true);
+      cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true);
+      cv.setUint16(36, 0, true);
+      cv.setUint32(38, 0, true);
+      cv.setUint32(42, offset, true);
+      cen.set(nameBytes, 46);
+      central.push(cen);
+
+      offset += local.length + payload.length;
+    }
+
+    const cdSize = central.reduce(function (s, c) { return s + c.length; }, 0);
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(4, 0, true);
+    ev.setUint16(6, 0, true);
+    ev.setUint16(8, entries.length, true);
+    ev.setUint16(10, entries.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, offset, true);
+    ev.setUint16(20, 0, true);
+
+    return new Blob(chunks.concat(central, [eocd]), { type: "application/octet-stream" });
+  }
+
+  let crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+        crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
+  }
+
+  async function download3mf() {
+    if (el.export3mf.disabled || exporting) return;
+    exporting = true;
+    const exportType = state.type;
+    const exportW = state.width;
+    const exportD = state.depth;
+    try {
+      el.progress.classList.add("on");
+      el.export3mf.disabled = true;
+      el.export3mf.textContent = "Génération du 3MF…";
+      await new Promise(function (r) { setTimeout(r, 30); });
+      await ensureEdgeMeshes(lastResult);
+      const built = build3mfBlob();
+      const blob = await zipEntries(built.entries);
+      const name = "plaques-" + exportType + "-" + Math.round(exportW) + "x" + Math.round(exportD) + "-" + built.plates + "plateaux.3mf";
+      downloadBlob(blob, name);
+      toast("3MF généré : " + built.plates + " plateau" + (built.plates > 1 ? "x" : ""));
+    } catch (e) {
+      el.autoStatus.className = "alert bad";
+      el.autoStatus.textContent = e.message || "Erreur de génération.";
+      toast("Erreur : " + (e.message || "3MF"));
+    } finally {
+      exporting = false;
+      el.progress.classList.remove("on");
+      el.export3mf.textContent = "Télécharger le 3MF multi-plateaux";
+      update();
+    }
+  }
+
+  function listText() {
+    const layout = lastResult;
+    if (!layout || !layout.ok) return "Aucune plaque à générer.";
+    const t = TYPES[state.type];
+    const rows = aggregatePieces(layout);
+    const lines = [];
+    lines.push("Tiroir : " + round1(state.width) + " × " + round1(state.depth) + " mm");
+    lines.push("Grille : " + layout.cols + " × " + layout.rows + " CU (" + layout.gridW + " × " + layout.gridH + " mm)");
+    lines.push("Type : " + t.label);
+    lines.push("");
+    rows.forEach(function (r) {
+      lines.push("- " + r.a + "×" + r.b + " CU (" + (r.a * layout.unit) + "×" + (r.b * layout.unit) + " mm) × " + r.count);
+    });
+    lines.push("");
+    lines.push("Total : " + layout.pieces.length + " plaques");
+    lines.push("Reste : " + round1(Math.max(layout.leftoverW, layout.leftoverD)) + " mm");
+    lines.push("Couverture : " + Math.round(layout.coverage) + " %");
+    if (state.showClips) lines.push("Dual Clips (est.) : " + layout.clips);
+    const extGroups = groupEdgePieces(layout);
+    if (extGroups.length) {
+      lines.push("");
+      lines.push("Plaques de bord étendues :");
+      extGroups.forEach(function (r) {
+        lines.push("- " + r.w + "×" + r.h + " CU -> " + round1(r.wmm) + "×" + round1(r.hmm) + " mm (bord continu " + edgeSides(r) + ") × " + r.count);
+      });
+    }
+    return lines.join("\n");
+  }
+
+  function csvText() {
+    const layout = lastResult;
+    const t = TYPES[state.type];
+    const sep = ";";
+    const lines = [];
+    lines.push("\uFEFF" + ["Tiroir largeur (mm)", "Tiroir profondeur (mm)", "Type", "Taille CU", "Largeur (mm)", "Profondeur (mm)", "Quantité"].join(sep));
+    if (layout && layout.ok) {
+      aggregatePieces(layout).forEach(function (r) {
+        lines.push([state.width, state.depth, t.label, r.a + "x" + r.b, r.a * layout.unit, r.b * layout.unit, r.count].join(sep));
+      });
+      lines.push("");
+      lines.push(["Total plaques", layout.pieces.length].join(sep));
+      const extGroups = groupEdgePieces(layout);
+      if (extGroups.length) {
+        lines.push(["Plaques de bord étendues", ""].join(sep));
+        extGroups.forEach(function (r) {
+          lines.push(["Bord " + edgeSides(r), r.w + "x" + r.h + " CU", round1(r.wmm) + "x" + round1(r.hmm) + " mm", r.count].join(sep));
+        });
+      }
+      if (state.showClips) lines.push(["Dual Clips (est.)", layout.clips].join(sep));
+    }
+    return lines.join("\n");
+  }
+
+  function toast(message) {
+    el.toast.textContent = message;
+    el.toast.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.toast.classList.remove("show"); }, 1900);
+  }
+
+  function copyList() {
+    const text = listText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast("Liste copiée dans le presse-papiers"); }, function () { fallbackCopy(text); });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); toast("Liste copiée"); }
+    catch (e) { toast("Impossible de copier"); }
+    document.body.removeChild(ta);
+  }
+
+  function downloadCsv() {
+    const blob = new Blob([csvText()], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "plaques-multibin-" + Math.round(state.width) + "x" + Math.round(state.depth) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    toast("CSV téléchargé");
+  }
+
+  function reset() {
+    state = {
+      width: 500,
+      depth: 400,
+      clearance: 2,
+      maxSize: 6,
+      unit: 50,
+      type: "square",
+      centered: true,
+      symmetric: false,
+      edgeFill: false,
+      showClips: true,
+      clipDensity: 1,
+      bedX: 350,
+      bedY: 350,
+      bedZ: 350,
+      bedMargin: 5,
+      gap: 3,
+      autoRotate: true,
+      limitToBed: true
+    };
+    writeInputs();
+    update();
+    toast("Valeurs réinitialisées");
+  }
+
+  ["input", "change"].forEach(function (evt) {
+    [el.w, el.d, el.clearance, el.maxSize, el.centered, el.symmetric, el.edgeFill, el.showClips, el.clipDensity,
+     el.bedX, el.bedY, el.bedZ, el.bedMargin, el.gap, el.autoRotate, el.limitToBed].forEach(function (node) {
+      node.addEventListener(evt, update);
+    });
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", copyList);
+  document.getElementById("csvBtn").addEventListener("click", downloadCsv);
+  document.getElementById("printBtn").addEventListener("click", function () { window.print(); });
+  document.getElementById("resetBtn").addEventListener("click", reset);
+
+  el.ptype.addEventListener("change", update);
+  document.getElementById("view3dBtn").addEventListener("click", render3D);
+  document.getElementById("export3mf").addEventListener("click", download3mf);
+
+  window.__spg = {
+    state: function () { return state; },
+    layout: function () { return lastResult; },
+    pack: function () { return lastPack; },
+    required: function () { return lastRequired; },
+    update: update,
+    build3mfBlob: build3mfBlob,
+    zipEntries: zipEntries,
+    libraries: libraries
+  };
+
+  writeInputs();
+  update();
+  initAutoLoad();
+})();
+</script>
+</body>
+</html>
