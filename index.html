@@ -738,10 +738,11 @@
 
   function computeLayout() {
     const unit = state.unit;
-    const usableW = Math.max(0, state.width - state.clearance);
-    const usableD = Math.max(0, state.depth - state.clearance);
-    const cols = Math.floor(usableW / unit + 1e-9);
-    const rows = Math.floor(usableD / unit + 1e-9);
+    const cols = Math.floor(state.width / unit + 1e-9);
+    const rows = Math.floor(state.depth / unit + 1e-9);
+    const actualGapW = state.width - cols * unit;
+    const actualGapD = state.depth - rows * unit;
+    const tightGame = Math.min(actualGapW, actualGapD) + 1e-6 < state.clearance;
     const bedInner = Math.min(state.bedX, state.bedY) - 2 * state.bedMargin;
     const bedFit = Math.floor(bedInner / unit + 1e-9);
     const typeMax = 10;
@@ -846,7 +847,8 @@
       offY: offY,
       margins: { left: mL, right: mR, top: mT, bottom: mB },
       edgePieces: pieces.filter(function (p) { return !!p.ext; }),
-      symmetryOverhead: symmetryOverhead
+      symmetryOverhead: symmetryOverhead,
+      tightGame: tightGame
     };
   }
 
@@ -1404,6 +1406,9 @@
     }
     if (state.symmetric && layout.symmetryOverhead > 0) {
       notice += " Symétrie : +" + layout.symmetryOverhead + " plaque" + (layout.symmetryOverhead > 1 ? "s" : "") + " par rapport à la disposition optimale.";
+    }
+    if (layout.tightGame) {
+      notice += " Grille remplie au maximum : le jeu réel (" + round1(Math.min(layout.leftoverW, layout.leftoverD)) + " mm) est inférieur au jeu demandé (" + round1(state.clearance) + " mm).";
     }
     el.notice.textContent = notice;
   }
