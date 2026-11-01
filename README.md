@@ -40,6 +40,8 @@ Limites : le 1×1 n'existe pas dans le générateur officiel ; les plaques Base/
 |---|---|---|
 | ![Planificateur](docs/drawer.png) | ![Aperçu 3D](docs/3d.png) | ![Pile](docs/stack.png) |
 
+Vérification de la trame en vue de dessus : `docs/stack-top.png`.
+
 ## Ce qui n'est pas inclus
 
 Les **STL et maillages** (plaques **et clips**) **ne sont pas distribués** dans ce dépôt :
