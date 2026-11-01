@@ -1358,6 +1358,7 @@
   }
 
   function maybeLoadClips() {
+    if (IS_PUBLIC_DEMO) return;
     const set = selectedClipSet();
     if (!set || set.id === "none") return;
     if (clipLoadPromise || clipLoadError) return;
@@ -2303,7 +2304,7 @@
   }
 
   async function initAutoLoad() {
-    if (location.protocol === "file:") return;
+    if (location.protocol === "file:" || IS_PUBLIC_DEMO) return;
     await Promise.all(Object.keys(autoManifests).map(loadManifest));
     update();
   }
