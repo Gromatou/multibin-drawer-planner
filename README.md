@@ -14,13 +14,14 @@ Je précise que j'aime le système MultiBuild/MultiBoard et que ce n'est **pas u
 
 ## Fonctionnalités
 
-- Dimensions intérieures du tiroir (largeur/profondeur) et jeu réglable.
+- Dimensions intérieures du tiroir (largeur/profondeur) et jeu mini (alerte).
 - Calcul de la grille en **CU de 50 mm**.
 - Disposition optimisée par découpe guillotine (minimum de plaques).
 - **Symétrie** gauche/droite et haut/bas, avec les plus petites plaques au centre quand la géométrie le permet.
 - **Plaques de bord étendues** : une plaque d'une cellule plus grande est générée, coupée à la marge du tiroir, puis un **bord fin de 2,5 mm** est ajouté. Le motif continue naturellement : grands trous, petits trous aux nœuds, **filetage conservé**, sans pastilles ni cadre rapporté.
 - Aperçu 2D avec le motif réel, les dimensions et les bords.
 - **Aperçu 3D** des maillages STL réels dans l'app (rotation/zoom), sans passer par Orca.
+- **Clips adhésifs S** (VHB Bolt-Lock) : choix « Aucun clip » / « Clips adhésifs S », comptage automatique **Quad / Dual / Single** aux angles des plaques, repères dans l'aperçu 2D, maillages réels dans la 3D, et ajout automatique sur les plateaux d'impression.
 - Export **3MF projet multi-plateaux** Bambu Studio / OrcaSlicer.
 - Export CSV et copie de la liste.
 - Chargement automatique des plaques depuis un serveur local : pas d'import manuel.
@@ -40,7 +41,7 @@ Limites : le 1×1 n'existe pas dans le générateur officiel ; les plaques Base/
 
 ## Ce qui n'est pas inclus
 
-Les **STL et maillages ne sont pas distribués** dans ce dépôt :
+Les **STL et maillages** (plaques **et clips**) **ne sont pas distribués** dans ce dépôt :
 
 - ils sont soumis à la licence MultiBuild ;
 - le dépôt reste léger ;
@@ -81,6 +82,18 @@ Le script génère les tailles 2×2 → 10×10 dans `stls/base/` et `stls/lite/`
 
 Tu peux aussi télécharger toutes les tailles et lancer `node make-manifest.js`.
 
+### 1 bis. Fournir les clips (optionnel)
+
+Place les trois STL du set **S** ici :
+
+```
+stls/clips/s/quad.stl
+stls/clips/s/dual.stl
+stls/clips/s/single.stl
+```
+
+J'utilise les **Bolt-Lock VHB Tape Mount** (6,25 mm) : quad 50×50, dual 25×50, single 25×25. Ces fichiers ne sont pas inclus dans le dépôt (licence MultiBuild). Pour ajouter les **XS** ensuite : crée `stls/clips/xs/` avec les trois STL et ajoute le set `xs` dans `CLIP_SETS` (`index.html`).
+
 ### 2. Lancer l'outil
 
 ```bash
@@ -100,8 +113,9 @@ Ouvre ensuite **http://127.0.0.1:8765/**.
 1. Saisis les dimensions **intérieures** du tiroir et le plateau de l'imprimante.
 2. Choisis le type de plaque et la taille maximale.
 3. Active éventuellement **Symétrie** et **Plaques de bord étendues**.
-4. Vérifie l'aperçu 2D, puis **Télécharger le 3MF multi-plateaux**.
-5. Pour voir les vrais maillages : **Afficher la vue 3D** (glisser pour tourner, molette pour zoomer).
+4. Choisis les **clips** (ou « Aucun clip »). Les quantités Quad/Dual/Single sont calculées aux angles des plaques.
+5. Vérifie l'aperçu 2D, puis **Télécharger le 3MF multi-plateaux** (plaques + clips).
+6. Pour voir les vrais maillages : **Afficher la vue 3D** (glisser pour tourner, molette pour zoomer).
 
 Le 3MF ne contient volontairement pas de `project_settings.config` : dans Orca, il faut sélectionner le bon profil imprimante, et les dimensions de plateau saisies dans l'app doivent correspondre à celles du profil.
 
@@ -111,6 +125,7 @@ Le 3MF ne contient volontairement pas de `project_settings.config` : dans Orca, 
 - Bambu Studio 2.8
 - Firefox et Chrome
 - Maillages vérifiés `manifold = yes` dans Orca
+- Clips S : quad / dual / single ajoutés au 3MF et visibles dans la 3D
 
 ## Licence et crédits
 

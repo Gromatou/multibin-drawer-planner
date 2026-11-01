@@ -267,16 +267,15 @@
         <label class="check"><input type="checkbox" id="centered" checked> Centrer la grille dans le tiroir</label>
         <label class="check"><input type="checkbox" id="symmetric"> Symétrie (petites plaques au centre)</label>
         <label class="check"><input type="checkbox" id="edgeFill"> Plaques de bord étendues (grille continue)</label>
-        <label class="check"><input type="checkbox" id="showClips" checked> Estimer les Dual Clips</label>
-
         <div class="field">
-          <label for="clipDensity">Clips / CU <span class="hint">jonction · 1 CU = 50 mm</span></label>
-          <select class="input" id="clipDensity">
-            <option value="0.5">0,5</option>
-            <option value="1" selected>1</option>
-            <option value="2">2</option>
+          <label for="clipType">Clips <span class="hint">adhésifs · quad / dual / single</span></label>
+          <select class="input" id="clipType">
+            <option value="none">Aucun clip</option>
+            <option value="s">Clips adhésifs S</option>
+            <option value="xs" disabled>Clips adhésifs XS (bientôt)</option>
           </select>
         </div>
+        <p class="hint" style="margin:-8px 0 0">Quad aux 4 angles, Dual à 2, Single à 1. Les clips sont ajoutés aux plateaux et à la 3D.</p>
 
         <div class="divider"></div>
 
@@ -432,9 +431,21 @@
             </table>
           </div>
         </div>
+        <div id="clipWrap" style="display:none; border-top:1px solid var(--line-soft)">
+          <div class="preview-head" style="padding:14px 18px 0">
+            <h2 id="clipTitle">Clips adhésifs S</h2>
+            <span class="muted" id="clipFoot">—</span>
+          </div>
+          <div class="list-wrap">
+            <table>
+              <thead><tr><th>Clip</th><th>Dimensions</th><th class="num">Quantité</th><th>Angles</th></tr></thead>
+              <tbody id="clipBody"></tbody>
+            </table>
+          </div>
+        </div>
         <p class="notice" style="padding:0 18px 16px">
           <b>Hypothèses :</b> plaque = <span id="unitNote">50</span> mm par CU, bords jointifs, cotes intérieures du tiroir.
-          Les Dual Clips sont une <b>estimation</b> (1 clip par segment de CU sur une jonction) — vérifie la quantité selon ton montage.
+          Les clips sont comptés aux <b>angles des plaques</b> : quad à 4 angles, dual à 2, single à 1.
           Les plaques non carrées peuvent être tournées de 90°.
         </p>
       </section>
@@ -454,6 +465,26 @@
     lite: { label: "Lite Panel", color: "#34d399" }
   };
 
+  const CLIP_ORDER = ["quad", "dual", "single"];
+  const CLIP_COLORS = { quad: "#f59e0b", dual: "#38bdf8", single: "#a78bfa" };
+  const CLIP_SETS = {
+    none: { id: "none", label: "Aucun clip", parts: null },
+    s: {
+      id: "s",
+      label: "Clips adhésifs S",
+      folder: "stls/clips/s",
+      parts: {
+        quad: { key: "quad", label: "Quad S", short: "Q", file: "quad.stl", w: 50, h: 50, angles: "4 angles" },
+        dual: { key: "dual", label: "Dual S", short: "D", file: "dual.stl", w: 25, h: 50, angles: "2 angles" },
+        single: { key: "single", label: "Single S", short: "S", file: "single.stl", w: 25, h: 25, angles: "1 angle" }
+      }
+    }
+  };
+
+  const clipMeshCache = new Map();
+  let clipLoadPromise = null;
+  let clipLoadError = null;
+
   const el = {
     w: document.getElementById("w"),
     d: document.getElementById("d"),
@@ -463,12 +494,15 @@
     centered: document.getElementById("centered"),
     symmetric: document.getElementById("symmetric"),
     edgeFill: document.getElementById("edgeFill"),
-    showClips: document.getElementById("showClips"),
-    clipDensity: document.getElementById("clipDensity"),
+    clipType: document.getElementById("clipType"),
     preview: document.getElementById("preview"),
     partsBody: document.getElementById("partsBody"),
     partsFoot: document.getElementById("partsFoot"),
     clipsFoot: document.getElementById("clipsFoot"),
+    clipWrap: document.getElementById("clipWrap"),
+    clipTitle: document.getElementById("clipTitle"),
+    clipFoot: document.getElementById("clipFoot"),
+    clipBody: document.getElementById("clipBody"),
     extWrap: document.getElementById("extWrap"),
     extBody: document.getElementById("extBody"),
     extFoot: document.getElementById("extFoot"),
@@ -529,8 +563,7 @@
       centered: true,
       symmetric: false,
       edgeFill: false,
-      showClips: true,
-      clipDensity: 1,
+      clipType: "none",
       bedX: 350,
       bedY: 350,
       bedZ: 350,
@@ -542,7 +575,9 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaults;
-      return Object.assign(defaults, JSON.parse(raw));
+      const saved = JSON.parse(raw);
+      if (!saved.clipType) saved.clipType = saved.showClips ? "s" : "none";
+      return Object.assign(defaults, saved);
     } catch (e) {
       return defaults;
     }
@@ -561,8 +596,9 @@
     state.centered = el.centered.checked;
     state.symmetric = el.symmetric.checked;
     state.edgeFill = el.edgeFill.checked;
-    state.showClips = el.showClips.checked;
-    state.clipDensity = clampNumber(el.clipDensity.value, 0.1, 4, 1);
+    const nextClipType = CLIP_SETS[el.clipType.value] ? el.clipType.value : "none";
+    if (nextClipType !== state.clipType) clipLoadError = null;
+    state.clipType = nextClipType;
     state.bedX = clampNumber(el.bedX.value, 50, 2000, 350);
     state.bedY = clampNumber(el.bedY.value, 50, 2000, 350);
     state.bedZ = clampNumber(el.bedZ.value, 10, 2000, 350);
@@ -581,8 +617,8 @@
     el.centered.checked = state.centered;
     el.symmetric.checked = state.symmetric;
     el.edgeFill.checked = state.edgeFill;
-    el.showClips.checked = state.showClips;
-    el.clipDensity.value = String(state.clipDensity);
+    if (!CLIP_SETS[state.clipType]) state.clipType = "none";
+    el.clipType.value = state.clipType;
     el.bedX.value = state.bedX;
     el.bedY.value = state.bedY;
     el.bedZ.value = state.bedZ;
@@ -796,7 +832,7 @@
       }
     }
 
-    const clips = Math.ceil(boundaryUnits * state.clipDensity - 1e-9);
+    const clipLayout = computeClipPlacements(pieces, cols, rows);
     const leftoverW = state.width - cols * unit;
     const leftoverD = state.depth - rows * unit;
     const offX = state.centered ? leftoverW / 2 : 0;
@@ -830,7 +866,8 @@
       pieces: pieces,
       boundaryUnits: boundaryUnits,
       junctions: neighborPairs.size,
-      clips: clips,
+      clipCounts: clipLayout.counts,
+      clipPlacements: clipLayout.placements,
       gridW: cols * unit,
       gridH: rows * unit,
       leftoverW: leftoverW,
@@ -854,6 +891,51 @@
 
   function keyPair(a, b) {
     return a < b ? a + ":" + b : b + ":" + a;
+  }
+
+  function dualClipRotation(pieces, ids, vx, vy, cols, rows) {
+    const arr = Array.from(ids).map(function (i) { return pieces[i]; });
+    if (arr.length === 2) {
+      const a = arr[0], b = arr[1];
+      const shareV = (Math.abs(a.x + a.w - b.x) < 1e-6 || Math.abs(b.x + b.w - a.x) < 1e-6) && (a.y < b.y + b.h && b.y < a.y + a.h);
+      const shareH = (Math.abs(a.y + a.h - b.y) < 1e-6 || Math.abs(b.y + b.h - a.y) < 1e-6) && (a.x < b.x + b.w && b.x < a.x + a.w);
+      if (shareV && !shareH) return 90;
+      if (shareH && !shareV) return 0;
+      if (shareV && shareH) {
+        const acx = a.x + a.w / 2, acy = a.y + a.h / 2;
+        const bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+        return Math.abs(acx - bcx) >= Math.abs(acy - bcy) ? 90 : 0;
+      }
+    }
+    if (vx === 0 || vx === cols) return 0;
+    if (vy === 0 || vy === rows) return 90;
+    return 0;
+  }
+
+  function computeClipPlacements(pieces, cols, rows) {
+    const byVertex = new Map();
+    pieces.forEach(function (p, index) {
+      [[p.x, p.y], [p.x + p.w, p.y], [p.x + p.w, p.y + p.h], [p.x, p.y + p.h]].forEach(function (c) {
+        const key = c[0] + "," + c[1];
+        if (!byVertex.has(key)) byVertex.set(key, new Set());
+        byVertex.get(key).add(index);
+      });
+    });
+    const counts = { quad: 0, dual: 0, single: 0, total: 0, triple: 0 };
+    const placements = [];
+    byVertex.forEach(function (ids, key) {
+      const parts = key.split(",");
+      const vx = Number(parts[0]), vy = Number(parts[1]);
+      const n = ids.size;
+      if (!n) return;
+      const type = n >= 4 ? "quad" : (n === 3 ? "quad" : (n === 2 ? "dual" : "single"));
+      if (n === 3) counts.triple++;
+      const rot = type === "dual" ? dualClipRotation(pieces, ids, vx, vy, cols, rows) : 0;
+      counts[type]++;
+      counts.total++;
+      placements.push({ x: vx, y: vy, type: type, rot: rot, angles: n });
+    });
+    return { counts: counts, placements: placements };
   }
 
   function aggregatePieces(layout, includeEdge) {
@@ -982,6 +1064,31 @@
       }
     });
 
+    if (state.clipType !== "none" && layout.clipPlacements && layout.clipPlacements.length) {
+      const ms = Math.max(7, Math.min(14, unit * 0.26));
+      const fs = Math.max(5, Math.min(9, ms * 0.78));
+      layout.clipPlacements.forEach(function (c) {
+        const cx = ox + c.x * unit;
+        const cy = oy + c.y * unit;
+        const color = CLIP_COLORS[c.type] || "#94a3b8";
+        const title = (CLIP_SETS[state.clipType] && CLIP_SETS[state.clipType].parts[c.type].label || c.type) + " · " + c.angles + " angle" + (c.angles > 1 ? "s" : "");
+        parts.push('<g><title>' + title + '</title>');
+        if (c.type === "quad") {
+          parts.push('<rect x="' + (cx - ms / 2) + '" y="' + (cy - ms / 2) + '" width="' + ms + '" height="' + ms + '" rx="' + (ms * 0.18) + '" fill="' + color + '" stroke="#0b1020" stroke-width="0.8"/>');
+          parts.push('<circle cx="' + (cx - ms * 0.27) + '" cy="' + (cy - ms * 0.27) + '" r="' + (ms * 0.12) + '" fill="#0b1020" opacity="0.55"/>');
+          parts.push('<circle cx="' + (cx + ms * 0.27) + '" cy="' + (cy - ms * 0.27) + '" r="' + (ms * 0.12) + '" fill="#0b1020" opacity="0.55"/>');
+          parts.push('<circle cx="' + (cx - ms * 0.27) + '" cy="' + (cy + ms * 0.27) + '" r="' + (ms * 0.12) + '" fill="#0b1020" opacity="0.55"/>');
+          parts.push('<circle cx="' + (cx + ms * 0.27) + '" cy="' + (cy + ms * 0.27) + '" r="' + (ms * 0.12) + '" fill="#0b1020" opacity="0.55"/>');
+        } else if (c.type === "dual") {
+          parts.push('<g transform="rotate(' + (c.rot || 0) + ' ' + cx + ' ' + cy + ')"><rect x="' + (cx - ms * 0.38) + '" y="' + (cy - ms * 0.9) + '" width="' + (ms * 0.76) + '" height="' + (ms * 1.8) + '" rx="' + (ms * 0.2) + '" fill="' + color + '" stroke="#0b1020" stroke-width="0.8"/></g>');
+        } else {
+          parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (ms * 0.48) + '" fill="' + color + '" stroke="#0b1020" stroke-width="0.8"/>');
+        }
+        parts.push('<text x="' + cx + '" y="' + (cy + fs * 0.35) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="900" fill="#0b1020" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">' + (c.type === "quad" ? "Q" : c.type === "dual" ? "D" : "S") + '</text>');
+        parts.push('</g>');
+      });
+    }
+
     if (!state.edgeFill) parts.push('<rect x="' + ox + '" y="' + oy + '" width="' + layout.gridW + '" height="' + layout.gridH + '" fill="none" stroke="#5b6b89" stroke-width="' + stroke + '" vector-effect="non-scaling-stroke"/>');
 
     const dimY = padT - Math.max(16, padT * 0.45);
@@ -1036,11 +1143,34 @@
     const areaCm2 = layout.gridW * layout.gridH / 100;
     el.partsFoot.innerHTML = '<b>' + total + '</b> plaque' + (total > 1 ? 's' : '') + ' au total' + (edgeCount ? ' (dont ' + edgeCount + ' de bord étendu' + (edgeCount > 1 ? 's' : '') + ')' : '') + ' — ' + formatArea(areaCm2) + ' de grille';
 
-    if (state.showClips) {
-      el.clipsFoot.innerHTML = 'Dual Clips (est.) : <b>' + layout.clips + '</b> <span class="muted">(' + layout.boundaryUnits + ' segments de CU)</span>';
+    const clipSet = CLIP_SETS[state.clipType];
+    const c = layout.clipCounts || { quad: 0, dual: 0, single: 0, total: 0 };
+    if (clipSet && clipSet.id !== "none" && c.total) {
+      el.clipsFoot.innerHTML = clipSet.label + ' : <b>' + c.total + '</b> <span class="muted">(Q ' + c.quad + ' · D ' + c.dual + ' · S ' + c.single + ')</span>';
     } else {
       el.clipsFoot.textContent = "";
     }
+  }
+
+  function renderClipTable(layout) {
+    const set = CLIP_SETS[state.clipType];
+    const c = layout && layout.clipCounts;
+    if (!layout || !layout.ok || !set || set.id === "none" || !c || !c.total) {
+      el.clipWrap.style.display = "none";
+      return;
+    }
+    el.clipWrap.style.display = "";
+    el.clipTitle.textContent = set.label;
+    el.clipFoot.textContent = c.total + ' clip' + (c.total > 1 ? 's' : '') + (c.triple ? ' · ' + c.triple + ' coin' + (c.triple > 1 ? 's' : '') + ' en T compté' + (c.triple > 1 ? 's' : '') + ' en quad' : '') + ' · ajoutés aux plateaux';
+    el.clipBody.innerHTML = CLIP_ORDER.filter(function (t) { return c[t] > 0; }).map(function (t) {
+      const p = set.parts[t];
+      return '<tr>' +
+        '<td><span class="size-chip" style="background:' + CLIP_COLORS[t] + ';color:#0b1020">' + p.short + '</span> ' + p.label + '</td>' +
+        '<td>' + p.w + ' × ' + p.h + ' mm</td>' +
+        '<td class="num"><span class="qty">' + c[t] + '</span></td>' +
+        '<td>' + (t === "quad" && c.triple ? '4 angles / 3 en T' : p.angles) + '</td>' +
+        '</tr>';
+    }).join("");
   }
 
   function edgeSides(e) {
@@ -1140,6 +1270,67 @@
 
   function getLibrary() {
     return libraries[state.type] || libraries.square;
+  }
+
+  function selectedClipSet() {
+    return CLIP_SETS[state.clipType] || CLIP_SETS.none;
+  }
+
+  function clipKey(setId, type) {
+    return "clip:" + setId + ":" + type;
+  }
+
+  function clipMeshReady(set) {
+    if (!set || set.id === "none") return true;
+    return CLIP_ORDER.every(function (t) { return clipMeshCache.has(clipKey(set.id, t)); });
+  }
+
+  function clipMeshMissing(set) {
+    if (!set || set.id === "none") return [];
+    return CLIP_ORDER.filter(function (t) { return !clipMeshCache.has(clipKey(set.id, t)); });
+  }
+
+  function ensureClipMeshes() {
+    const set = selectedClipSet();
+    if (!set || set.id === "none") return Promise.resolve();
+    const missing = clipMeshMissing(set);
+    if (!missing.length) return Promise.resolve();
+    if (clipLoadPromise) return clipLoadPromise;
+    clipLoadError = null;
+    clipLoadPromise = (async function () {
+      for (let i = 0; i < missing.length; i++) {
+        const type = missing[i];
+        const part = set.parts[type];
+        const res = await fetch(set.folder + "/" + part.file, { cache: "force-cache" });
+        if (!res.ok) throw new Error(part.label + " : HTTP " + res.status);
+        const parsed = parseStl(await res.arrayBuffer());
+        clipMeshCache.set(clipKey(set.id, type), {
+          key: clipKey(set.id, type),
+          type: type,
+          label: part.label,
+          short: part.short,
+          positions: parsed.positions,
+          indices: parsed.indices,
+          bbox: parsed.bbox,
+          w: part.w,
+          h: part.h
+        });
+      }
+    })().catch(function (e) {
+      clipLoadError = e.message || String(e);
+      console.warn("Chargement des clips impossible :", e);
+    }).finally(function () {
+      clipLoadPromise = null;
+      update();
+    });
+    return clipLoadPromise;
+  }
+
+  function maybeLoadClips() {
+    const set = selectedClipSet();
+    if (!set || set.id === "none") return;
+    if (clipLoadPromise || clipLoadError) return;
+    if (clipMeshMissing(set).length) ensureClipMeshes();
   }
 
   function requiredSizes(layout) {
@@ -1249,6 +1440,33 @@
     return { bins: bins, utilization: used / (binW * binH * Math.max(1, bins.length)) };
   }
 
+  function packClips(best, clipItems, binW, binH, gap, allowRotate) {
+    for (let i = 0; i < clipItems.length; i++) {
+      const item = clipItems[i];
+      let chosen = null;
+      for (let bi = 0; bi < best.bins.length; bi++) {
+        const pos = findPosition(best.bins[bi], item, gap, allowRotate);
+        if (pos && (!chosen || pos.score < chosen.score)) chosen = Object.assign({ bin: bi }, pos);
+      }
+      if (chosen) {
+        const bin = best.bins[chosen.bin];
+        bin.items.push({ item: item, x: chosen.x, y: chosen.y, w: chosen.w, h: chosen.h, rot: chosen.rot });
+        splitFree(bin, chosen, gap);
+      } else {
+        const bin = { free: [{ x: 0, y: 0, w: binW, h: binH }], items: [] };
+        const pos = findPosition(bin, item, gap, allowRotate);
+        if (!pos) return { error: "Le clip " + item.clipType + " (" + item.w + "×" + item.h + " mm) ne tient pas sur le plateau." };
+        best.bins.push(bin);
+        bin.items.push({ item: item, x: pos.x, y: pos.y, w: pos.w, h: pos.h, rot: pos.rot });
+        splitFree(bin, pos, gap);
+      }
+    }
+    let used = 0;
+    best.bins.forEach(function (b) { b.items.forEach(function (it) { used += it.w * it.h; }); });
+    best.utilization = used / (binW * binH * Math.max(1, best.bins.length));
+    return best;
+  }
+
   function packAll(layout) {
     const binW = state.bedX - 2 * state.bedMargin;
     const binH = state.bedY - 2 * state.bedMargin;
@@ -1274,6 +1492,35 @@
     }
     best.binW = binW;
     best.binH = binH;
+    best.plateCount = layout.pieces.length;
+    best.clipCount = 0;
+
+    const clipSet = selectedClipSet();
+    if (clipSet && clipSet.id !== "none" && layout.clipCounts && layout.clipCounts.total) {
+      const clipItems = [];
+      CLIP_ORDER.forEach(function (type) {
+        const part = clipSet.parts[type];
+        const count = layout.clipCounts[type] || 0;
+        for (let i = 0; i < count; i++) {
+          clipItems.push({
+            id: "clip:" + type + ":" + i,
+            isClip: true,
+            clipType: type,
+            a: part.w,
+            b: part.h,
+            w: part.w,
+            h: part.h,
+            label: part.short,
+            fixed: false
+          });
+        }
+      });
+      if (clipItems.length) {
+        const res = packClips(best, clipItems, binW, binH, state.gap, state.autoRotate);
+        if (res.error) return res;
+        best.clipCount = clipItems.length;
+      }
+    }
     return best;
   }
 
@@ -1294,19 +1541,24 @@
       bin.items.forEach(function (it) {
         const x = margin + it.x;
         const y = margin + it.y;
-        const pal = paletteFor(it.item.a * it.item.b);
+        const pal = it.item.isClip
+          ? { fill: CLIP_COLORS[it.item.clipType] || "#94a3b8", stroke: "#0b1020" }
+          : paletteFor(it.item.a * it.item.b);
         const gap = Math.min(1.2, Math.min(it.w, it.h) * 0.02);
         parts.push('<rect x="' + (x + gap / 2) + '" y="' + (y + gap / 2) + '" width="' + Math.max(0, it.w - gap) + '" height="' + Math.max(0, it.h - gap) + '" rx="1.2" fill="' + pal.fill + '" stroke="' + pal.stroke + '" stroke-width="0.9" vector-effect="non-scaling-stroke"/>');
-        const fs = Math.min(15, Math.min(it.w, it.h) * 0.2);
-        if (fs >= 6 && it.w > fs * 2.6 && it.h > fs * 1.8) {
-          parts.push('<text x="' + (x + it.w / 2) + '" y="' + (y + it.h / 2 + fs * 0.36) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="800" fill="#0b1020">' + it.item.a + '×' + it.item.b + '</text>');
+        const fs = Math.min(15, Math.max(6, Math.min(it.w, it.h) * 0.22));
+        if (fs >= 6 && it.w > fs * 2.2 && it.h > fs * 1.6) {
+          const label = it.item.isClip ? it.item.label : (it.item.a + '×' + it.item.b);
+          parts.push('<text x="' + (x + it.w / 2) + '" y="' + (y + it.h / 2 + fs * 0.36) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="800" fill="#0b1020">' + label + '</text>');
         }
       });
       parts.push('</svg>');
       const used = bin.items.reduce(function (s, it) { return s + it.w * it.h; }, 0);
       const util = Math.round(used / (pack.binW * pack.binH) * 100);
+      const clipCount = bin.items.filter(function (it) { return it.item.isClip; }).length;
+      const labelPieces = bin.items.length + ' pièce' + (bin.items.length > 1 ? 's' : '') + (clipCount ? ' dont ' + clipCount + ' clip' + (clipCount > 1 ? 's' : '') : '');
       return '<div class="bed-card">' + parts.join("") +
-        '<div class="bed-cap"><span>Plateau <b>' + (idx + 1) + '</b></span><span>' + bin.items.length + ' pièce' + (bin.items.length > 1 ? 's' : '') + ' · ' + util + '%</span></div>' +
+        '<div class="bed-cap"><span>Plateau <b>' + (idx + 1) + '</b></span><span>' + labelPieces + ' · ' + util + '%</span></div>' +
         '</div>';
     }).join("");
     el.beds.innerHTML = cards;
@@ -1336,6 +1588,10 @@
     const lib = getLibrary();
     const ready = required.filter(function (r) { return lib.has(r.key); });
     const missing = required.filter(function (r) { return !lib.has(r.key); });
+    const clipSet = selectedClipSet();
+    const clipCount = (layout.clipCounts && layout.clipCounts.total) || 0;
+    const clipsSelected = clipSet.id !== "none" && clipCount > 0;
+    const clipsReady = !clipsSelected || clipMeshReady(clipSet);
 
     renderReqs(required);
 
@@ -1347,7 +1603,7 @@
     renderBeds(pack);
 
     el.statBeds.innerHTML = pack.error ? "—" : pack.bins.length + ' <small>plateau' + (pack.bins.length > 1 ? 'x' : '') + '</small>';
-    el.statPieces.innerHTML = layout.pieces.length + ' <small>pièces</small>';
+    el.statPieces.innerHTML = layout.pieces.length + ' <small>plaques</small>' + (clipCount ? ' + ' + clipCount + ' <small>clips</small>' : '');
     el.statMax.innerHTML = layout.effectiveMax + ' <small>CU' + (layout.capped ? ' · limité' : '') + '</small>';
     el.statStl.innerHTML = ready.length + '/' + required.length + ' <small>tailles</small>';
     const man = autoManifests[state.type];
@@ -1388,13 +1644,29 @@
       el.exportHint.textContent = autoLoading ? "Chargement automatique des pièces…" : "Pièces manquantes : " + missing.map(function (r) { return r.key; }).join(", ");
       el.autoStatus.className = "alert warn";
       el.autoStatus.textContent = autoLoading ? "Chargement automatique des pièces nécessaires…" : "Certaines pièces ne sont pas disponibles sur le serveur.";
+    } else if (!clipsReady) {
+      if (clipLoadError) {
+        el.printBadge.className = "badge bad";
+        el.printBadge.textContent = "Clips";
+        el.export3mf.disabled = true;
+        el.exportHint.textContent = "Clips indisponibles : " + clipLoadError;
+        el.autoStatus.className = "alert bad";
+        el.autoStatus.textContent = "Impossible de charger les clips depuis " + clipSet.folder + " : " + clipLoadError;
+      } else {
+        el.printBadge.className = "badge warn";
+        el.printBadge.textContent = "Clips…";
+        el.export3mf.disabled = true;
+        el.exportHint.textContent = "Chargement des clips " + clipSet.label + "…";
+        el.autoStatus.className = "alert warn";
+        el.autoStatus.textContent = "Chargement des clips " + clipSet.label + " (" + clipCount + ")…";
+      }
     } else {
       el.printBadge.className = "badge ok";
       el.printBadge.textContent = "Prêt";
       el.export3mf.disabled = false;
-      el.exportHint.textContent = layout.pieces.length + " plaques" + ((layout.edgePieces || []).length ? " dont " + layout.edgePieces.length + " de bord étendu" : "") + " sur " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+      el.exportHint.textContent = layout.pieces.length + " plaques" + ((layout.edgePieces || []).length ? " dont " + layout.edgePieces.length + " de bord étendu" : "") + (clipCount ? " + " + clipCount + " clips" : "") + " sur " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
       el.autoStatus.className = "alert ok";
-      el.autoStatus.textContent = "Toutes les pièces nécessaires sont chargées" + ((layout.edgePieces || []).length ? " (bords continus inclus)" : "") + ". Le 3MF utilisera " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+      el.autoStatus.textContent = "Toutes les pièces nécessaires sont chargées" + ((layout.edgePieces || []).length ? " (bords continus inclus)" : "") + (clipCount ? ", avec " + clipCount + " clips " + clipSet.label : "") + ". Le 3MF utilisera " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
     }
 
     let notice = "";
@@ -1426,8 +1698,11 @@
     el.view3dBtn.disabled = true;
     el.view3dBtn.textContent = "Préparation de la 3D…";
     try {
-      el.view3dWrap.innerHTML = '<div class="alert warn">Génération des plaques de bord et préparation de la 3D…</div>';
+      const clipSet3d = selectedClipSet();
+      const hasClips = clipSet3d.id !== "none" && lastResult.clipCounts && lastResult.clipCounts.total > 0;
+      el.view3dWrap.innerHTML = '<div class="alert warn">Génération des plaques de bord' + (hasClips ? ' et chargement des clips' : '') + '…</div>';
       await ensureEdgeMeshes(lastResult);
+      if (hasClips) await ensureClipMeshes();
       const THREE = await import("./vendor/three.module.js");
       if (threeViewer) {
         threeViewer.scene.traverse(function (o) {
@@ -1472,6 +1747,7 @@
         new THREE.LineBasicMaterial({ color: 0x1d2a42 })
       ));
 
+      let plateTop = 0;
       lastResult.pieces.forEach(function (p) {
         const entry = p.ext ? edgeMeshCache.get(edgeKey(p)) : lib.get(sizeKey(p.w, p.h));
         if (!entry) return;
@@ -1489,8 +1765,51 @@
         const tx = p.ext ? p.ext.xmm + p.ext.wmm / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
         const ty = p.ext ? p.ext.ymm + p.ext.hmm / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
         mesh.position.set(tx - cx, ty - cy, -bb.min[2]);
+        plateTop = Math.max(plateTop, bb.max[2] - bb.min[2]);
         scene.add(mesh);
       });
+
+      if (hasClips) {
+        const clipGeo = new Map();
+        const clipMat = new Map();
+        CLIP_ORDER.forEach(function (type) {
+          const entry = clipMeshCache.get(clipKey(clipSet3d.id, type));
+          if (!entry) return;
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.BufferAttribute(entry.positions, 3));
+          geo.setIndex(new THREE.BufferAttribute(entry.indices, 1));
+          geo.computeVertexNormals();
+          clipGeo.set(type, geo);
+          clipMat.set(type, new THREE.MeshStandardMaterial({
+            color: new THREE.Color(CLIP_COLORS[type] || "#94a3b8"),
+            metalness: 0.05,
+            roughness: 0.55,
+            side: THREE.DoubleSide
+          }));
+        });
+        lastResult.clipPlacements.forEach(function (c) {
+          const entry = clipMeshCache.get(clipKey(clipSet3d.id, c.type));
+          const geo = clipGeo.get(c.type);
+          const mat = clipMat.get(c.type);
+          if (!entry || !geo || !mat) return;
+          const bb = entry.bbox;
+          const cx = (bb.min[0] + bb.max[0]) / 2;
+          const cy = (bb.min[1] + bb.max[1]) / 2;
+          const halfW = (bb.max[0] - bb.min[0]) / 2;
+          const halfH = (bb.max[1] - bb.min[1]) / 2;
+          const rot = c.rot ? Math.PI / 2 : 0;
+          const ex = rot ? halfH : halfW;
+          const ey = rot ? halfW : halfH;
+          let px = lastResult.offX + c.x * state.unit;
+          let py = lastResult.offY + c.y * state.unit;
+          px = Math.min(state.width - ex, Math.max(ex, px));
+          py = Math.min(state.depth - ey, Math.max(ey, py));
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(px - cx, py - cy, plateTop - bb.min[2] + 0.05);
+          mesh.rotation.z = rot;
+          scene.add(mesh);
+        });
+      }
 
       const W = state.width, D = state.depth;
       const pts = [new THREE.Vector3(0, 0, 0.05), new THREE.Vector3(W, 0, 0.05), new THREE.Vector3(W, D, 0.05), new THREE.Vector3(0, D, 0.05)];
@@ -1556,8 +1875,10 @@
     renderPreview(layout);
     renderPrint(layout);
     renderTable(layout);
+    renderClipTable(layout);
     renderExtTable(layout);
     scheduleAutoLoad();
+    maybeLoadClips();
   }
 
   function currentManifest() {
@@ -1950,6 +2271,11 @@
     const required = lastRequired;
     const missing = required.filter(function (r) { return !lib.has(r.key); });
     if (missing.length) throw new Error("Pièces manquantes : " + missing.map(function (r) { return r.key; }).join(", "));
+    const clipSet = selectedClipSet();
+    if (clipSet.id !== "none" && layout.clipCounts && layout.clipCounts.total) {
+      const missingClips = clipMeshMissing(clipSet);
+      if (missingClips.length) throw new Error("Clips manquants : " + missingClips.join(", "));
+    }
 
     const meshIndex = new Map();
     const meshes = [];
@@ -1958,6 +2284,33 @@
 
     pack.bins.forEach(function (bin, binIndex) {
       bin.items.forEach(function (it) {
+        if (it.item.isClip) {
+          const type = it.item.clipType;
+          const key = clipKey(state.clipType, type);
+          const entry = clipMeshCache.get(key);
+          if (!entry) throw new Error("Clip non chargé : " + key);
+          if (!meshIndex.has(key)) {
+            meshIndex.set(key, meshes.length + 1);
+            meshes.push({ key: key, entry: entry });
+          }
+          instances.push({
+            bin: binIndex,
+            x: it.x,
+            y: it.y,
+            w: it.w,
+            h: it.h,
+            entry: entry,
+            mesh: meshIndex.get(key),
+            ext: false,
+            isClip: true,
+            clipType: type,
+            label: CLIP_SETS[state.clipType].parts[type].label,
+            wid: 2 + instanceId * 2,
+            identify: instanceId + 1
+          });
+          instanceId++;
+          return;
+        }
         const piece = it.item.piece;
         const baseKey = sizeKey(piece.w, piece.h);
         const base = lib.get(baseKey);
@@ -2192,6 +2545,11 @@
       el.export3mf.textContent = "Génération du 3MF…";
       await new Promise(function (r) { setTimeout(r, 30); });
       await ensureEdgeMeshes(lastResult);
+      const clipSet = selectedClipSet();
+      if (clipSet.id !== "none" && lastResult.clipCounts && lastResult.clipCounts.total) {
+        await ensureClipMeshes();
+        if (clipLoadError) throw new Error("Clips : " + clipLoadError);
+      }
       const built = build3mfBlob();
       const blob = await zipEntries(built.entries);
       const name = "plaques-" + exportType + "-" + Math.round(exportW) + "x" + Math.round(exportD) + "-" + built.plates + "plateaux.3mf";
@@ -2226,7 +2584,10 @@
     lines.push("Total : " + layout.pieces.length + " plaques");
     lines.push("Reste : " + round1(Math.max(layout.leftoverW, layout.leftoverD)) + " mm");
     lines.push("Couverture : " + Math.round(layout.coverage) + " %");
-    if (state.showClips) lines.push("Dual Clips (est.) : " + layout.clips);
+    if (layout.clipCounts && layout.clipCounts.total && state.clipType !== "none") {
+      const cs = CLIP_SETS[state.clipType];
+      lines.push(cs.label + " : " + layout.clipCounts.total + " (Quad " + layout.clipCounts.quad + ", Dual " + layout.clipCounts.dual + ", Single " + layout.clipCounts.single + ")");
+    }
     const extGroups = groupEdgePieces(layout);
     if (extGroups.length) {
       lines.push("");
@@ -2257,7 +2618,12 @@
           lines.push(["Bord " + edgeSides(r), r.w + "x" + r.h + " CU", round1(r.wmm) + "x" + round1(r.hmm) + " mm", r.count].join(sep));
         });
       }
-      if (state.showClips) lines.push(["Dual Clips (est.)", layout.clips].join(sep));
+      if (layout.clipCounts && layout.clipCounts.total && state.clipType !== "none") {
+        const cs = CLIP_SETS[state.clipType];
+        lines.push([cs.label + " Quad", layout.clipCounts.quad].join(sep));
+        lines.push([cs.label + " Dual", layout.clipCounts.dual].join(sep));
+        lines.push([cs.label + " Single", layout.clipCounts.single].join(sep));
+      }
     }
     return lines.join("\n");
   }
@@ -2314,8 +2680,7 @@
       centered: true,
       symmetric: false,
       edgeFill: false,
-      showClips: true,
-      clipDensity: 1,
+      clipType: "none",
       bedX: 350,
       bedY: 350,
       bedZ: 350,
@@ -2330,7 +2695,7 @@
   }
 
   ["input", "change"].forEach(function (evt) {
-    [el.w, el.d, el.clearance, el.maxSize, el.centered, el.symmetric, el.edgeFill, el.showClips, el.clipDensity,
+    [el.w, el.d, el.clearance, el.maxSize, el.centered, el.symmetric, el.edgeFill, el.clipType,
      el.bedX, el.bedY, el.bedZ, el.bedMargin, el.gap, el.autoRotate, el.limitToBed].forEach(function (node) {
       node.addEventListener(evt, update);
     });
