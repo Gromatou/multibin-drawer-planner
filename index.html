@@ -1539,10 +1539,10 @@
     return (p.l > 0.05 ? "1" : "0") + (p.r > 0.05 ? "1" : "0") + (p.t > 0.05 ? "1" : "0") + (p.b > 0.05 ? "1" : "0");
   }
 
-  function symToMatch(item, targetPattern) {
+  function symToMatch(item, targetPattern, coreRot) {
     const key = extKey(targetPattern);
     for (let sym = 0; sym < 4; sym++) {
-      if (extKey(extSides(item, sym)) === key) return sym;
+      if (extKey(coreRotSides(extSides(item, sym), coreRot)) === key) return sym;
     }
     return 0;
   }
@@ -1578,7 +1578,7 @@
           target = coreRotSides(extSides(item, 0), coreRot);
           canonical.set(coreKey, target);
         }
-        const sym = symToMatch(item, target);
+        const sym = symToMatch(item, target, coreRot);
         let sides = extSides(item, sym);
         sides = coreRotSides(sides, coreRot);
         const oxCells = Math.round((stack.cw - rcw) / 2);
