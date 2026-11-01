@@ -1,9 +1,0 @@
-node_modules/
-stls/
-refs/
-incoming/
-generate-plates.js
-.DS_Store
-*.log
-.local-build/
-tests/out/
