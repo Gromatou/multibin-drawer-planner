@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Générateur de plaques MultiBin</title>
+<title>Générateur de plaques MultiBin & MultiBuild</title>
 <style>
   :root {
     color-scheme: dark;
@@ -207,7 +207,7 @@
     <div class="brand">
       <div class="logo">MB</div>
       <div>
-        <h1>Générateur de plaques MultiBin</h1>
+        <h1>Générateur de plaques MultiBin & MultiBuild</h1>
         <p class="sub">Tiroir → disposition, liste et 3MF multi-plateaux. Jeu de plaques inclus, aucun import.</p>
       </div>
     </div>
@@ -256,9 +256,9 @@
         <div class="field">
           <label for="ptype">Type de plaque <span class="hint">jeu inclus</span></label>
           <select class="input" id="ptype">
-            <option value="square">Square Plate — 2×1 → 10×10</option>
-            <option value="base">Base Plate — 2×2 → 10×10</option>
-            <option value="lite">Lite Panel — 2×2 → 10×10</option>
+            <option value="square">MultiBuild — Square Plate 2×1 → 10×10</option>
+            <option value="base">MultiBin — Base Plate 2×2 → 10×10</option>
+            <option value="lite">MultiBin — Lite Panel 2×2 → 10×10</option>
           </select>
         </div>
 
@@ -317,7 +317,7 @@
             <label for="printMode">Impression <span class="hint">mode</span></label>
             <select class="input" id="printMode">
               <option value="beds">Plateaux séparés</option>
-              <option value="stack">Empiler — Ironing Stack</option>
+              <option value="stack">Empiler — Ironing Stack (MultiBuild)</option>
             </select>
           </div>
           <div class="field">
@@ -325,7 +325,7 @@
             <input class="input" id="stackGap" type="number" min="0.05" step="0.05" value="0.2" disabled>
           </div>
         </div>
-        <p class="hint" style="margin:-8px 0 0">La plus grande plaque en bas, les plus petites au-dessus. Active l'ironing des surfaces supérieures dans le slicer.</p>
+        <p class="hint" style="margin:-8px 0 0">Empilement réservé aux plaques <b>MultiBuild Square</b>. Les plaques <b>MultiBin Base/Lite</b> ont un relief qui empêche l’empilement : elles restent sur plateaux séparés. Active l'ironing des surfaces supérieures dans le slicer.</p>
         <label class="check"><input type="checkbox" id="limitToBed" checked> Limiter les plaques au plateau</label>
 
         <div class="divider"></div>
@@ -473,9 +473,9 @@
   const STORAGE_KEY = "multibin-square-plate-generator-v1";
 
   const TYPES = {
-    square: { label: "Square Plate", color: "#f59e0b" },
-    base: { label: "Base Plate", color: "#38bdf8" },
-    lite: { label: "Lite Panel", color: "#34d399" }
+    square: { label: "MultiBuild Square Plate", color: "#f59e0b", stackable: true },
+    base: { label: "MultiBin Base Plate", color: "#38bdf8", stackable: false },
+    lite: { label: "MultiBin Lite Panel", color: "#34d399", stackable: false }
   };
 
   const PLATE_THICKNESS = { square: 6.2, base: 10, lite: 2.4 };
@@ -607,6 +607,7 @@
   }
 
   function readInputs() {
+    state.type = TYPES[el.ptype.value] ? el.ptype.value : "square";
     state.width = clampNumber(el.w.value, 50, 20000, 500);
     state.depth = clampNumber(el.d.value, 50, 20000, 400);
     state.clearance = clampNumber(el.clearance.value, 0, 200, 2);
@@ -624,10 +625,9 @@
     state.bedMargin = clampNumber(el.bedMargin.value, 0, 100, 5);
     state.gap = clampNumber(el.gap.value, 0, 50, 3);
     state.autoRotate = el.autoRotate.value === "1";
-    state.printMode = el.printMode.value === "stack" ? "stack" : "beds";
+    state.printMode = (TYPES[state.type] && TYPES[state.type].stackable && el.printMode.value === "stack") ? "stack" : "beds";
     state.stackGap = clampNumber(el.stackGap.value, 0.05, 10, 0.2);
     state.limitToBed = el.limitToBed.checked;
-    state.type = TYPES[el.ptype.value] ? el.ptype.value : "square";
   }
 
   function writeInputs() {
@@ -1285,7 +1285,7 @@
     el.typeLabel.textContent = t.label;
     el.unitNote.textContent = state.unit;
     if (el.setInfo) {
-      el.setInfo.textContent = state.type === "square" ? "Square Plate 2×1 → 10×10" : t.label + " 2×2 → 10×10";
+      el.setInfo.textContent = state.type === "square" ? "MultiBuild Square Plate 2×1 → 10×10" : t.label + " 2×2 → 10×10";
     }
   }
 
@@ -1499,6 +1499,7 @@
 
   function platePrintItems(layout) {
     const unit = state.unit;
+    const lib = libraries[state.type] || libraries.square;
     const canonical = new Map();
     layout.pieces.forEach(function (p) {
       if (!p.ext) return;
@@ -1509,12 +1510,35 @@
     });
     return layout.pieces.map(function (p, i) {
       const sides = p.ext ? canonical.get(sizeKey(p.w, p.h)) : null;
-      const printW = sides ? p.w * unit + sides.left + sides.right : p.w * unit;
-      const printH = sides ? p.h * unit + sides.top + sides.bottom : p.h * unit;
+      const coreKey = sizeKey(p.w, p.h);
+      const man = autoManifests[state.type];
+      const manFile = man && man.files ? man.files.find(function (f) { return f.key === coreKey; }) : null;
+      const baseEntry = lib.get(coreKey);
+      const nominalW = p.w * unit, nominalH = p.h * unit;
+      let nativeW = null, nativeH = null;
+      if (manFile && manFile.w && manFile.h) {
+        nativeW = manFile.w; nativeH = manFile.h;
+      } else if (baseEntry) {
+        nativeW = baseEntry.bbox.max[0] - baseEntry.bbox.min[0];
+        nativeH = baseEntry.bbox.max[1] - baseEntry.bbox.min[1];
+      }
+      let coreW = nominalW, coreH = nominalH;
+      if (nativeW !== null) {
+        const tol = Math.max(3, unit * 0.12);
+        if (Math.abs(nativeW - nominalW) <= tol && Math.abs(nativeH - nominalH) <= tol) {
+          coreW = nativeW; coreH = nativeH;
+        } else if (Math.abs(nativeH - nominalW) <= tol && Math.abs(nativeW - nominalH) <= tol) {
+          coreW = nativeH; coreH = nativeW;
+        }
+      }
+      const printW = coreW + (sides ? sides.left + sides.right : 0);
+      const printH = coreH + (sides ? sides.top + sides.bottom : 0);
       return {
         id: i, a: p.w, b: p.h,
         cw: p.w,
         ch: p.h,
+        coreW: coreW,
+        coreH: coreH,
         w: printW,
         h: printH,
         gx: sides ? sides.left : 0,
@@ -1532,7 +1556,9 @@
   }
 
   function coreBounds(item) {
-    return { l: -item.el, r: item.cw * state.unit + item.er, t: -item.et, b: item.ch * state.unit + item.eb };
+    const coreW = item.coreW !== undefined ? item.coreW : item.cw * state.unit;
+    const coreH = item.coreH !== undefined ? item.coreH : item.ch * state.unit;
+    return { l: -item.el, r: coreW + item.er, t: -item.et, b: coreH + item.eb };
   }
 
   function orientMatrix(sym) {
@@ -1578,13 +1604,13 @@
 
   function chooseLayerPlacement(stack, item, allowRotate) {
     const unit = state.unit;
-    const candidates = allowRotate ? [0, 1, 2, 3, 4, 5, 6, 7] : [0];
+    const candidates = [0];
     let best = null;
     for (let ci = 0; ci < candidates.length; ci++) {
       const sym = candidates[ci];
       const b = transformBounds(coreBounds(item), sym);
-      const rcw = (b.r - b.l) / unit;
-      const rch = (b.b - b.t) / unit;
+      const rcw = item.cw;
+      const rch = item.ch;
       if (rcw > stack.cw + 1e-6 || rch > stack.ch + 1e-6) continue;
       const rangeX = Math.ceil(stack.cw) + 2;
       const rangeY = Math.ceil(stack.ch) + 2;
@@ -1608,36 +1634,6 @@
     return best;
   }
 
-  function listLayerPlacements(stack, item, allowRotate) {
-    const unit = state.unit;
-    const candidates = allowRotate ? [0, 1, 2, 3, 4, 5, 6, 7] : [0];
-    const list = [];
-    for (let ci = 0; ci < candidates.length; ci++) {
-      const sym = candidates[ci];
-      const b = transformBounds(coreBounds(item), sym);
-      const rcw = (b.r - b.l) / unit;
-      const rch = (b.b - b.t) / unit;
-      if (rcw > stack.cw + 1e-6 || rch > stack.ch + 1e-6) continue;
-      const rangeX = Math.ceil(stack.cw) + 2;
-      const rangeY = Math.ceil(stack.ch) + 2;
-      const previous = stack.items.length ? stack.items[stack.items.length - 1] : null;
-      const below = previous ? { x: previous.dx, y: previous.dy, w: previous.w, h: previous.h } : { x: 0, y: 0, w: stack.w, h: stack.h };
-      for (let kx = -rangeX; kx <= rangeX; kx++) {
-        for (let ky = -rangeY; ky <= rangeY; ky++) {
-          const cx = stack.coreX + kx * unit;
-          const cy = stack.coreY + ky * unit;
-          const left = cx + b.l, right = cx + b.r;
-          const top = cy + b.t, bottom = cy + b.b;
-          if (left < -1e-6 || right > stack.w + 1e-6 || top < -1e-6 || bottom > stack.h + 1e-6) continue;
-          if (left < below.x - 1e-6 || right > below.x + below.w + 1e-6 || top < below.y - 1e-6 || bottom > below.y + below.h + 1e-6) continue;
-          const score = Math.pow((left + right) / 2 - stack.w / 2, 2) + Math.pow((top + bottom) / 2 - stack.h / 2, 2) + sym * 0.0001 + (kx + ky) * 0.00001;
-          list.push({ sym: sym, dx: left, dy: top, w: right - left, h: bottom - top, gx: -b.l, gy: -b.t, kx: kx, ky: ky, score: score });
-        }
-      }
-    }
-    return list.sort(function (a, b) { return a.score - b.score; });
-  }
-
   function layerFromBest(item, best) {
     return {
       item: item, rot: 0, sym: best.sym, coreRot: best.sym >= 4 ? 1 : 0,
@@ -1650,8 +1646,8 @@
     const stack = {
       base: item,
       baseSym: sym,
-      cw: (b.r - b.l) / state.unit,
-      ch: (b.b - b.t) / state.unit,
+      cw: item.cw,
+      ch: item.ch,
       w: b.r - b.l,
       h: b.b - b.t,
       coreX: -b.l,
@@ -1669,7 +1665,7 @@
 
   function tryRebuildStack(stack, item, allowRotate, gap) {
     let best = null;
-    const candidates = allowRotate ? [0, 1, 2, 3, 4, 5, 6, 7] : [0];
+    const candidates = [0];
     for (let ci = 0; ci < candidates.length; ci++) {
       const sym = candidates[ci];
       if (sym === stack.baseSym) continue;
@@ -1768,7 +1764,7 @@
     const items = platePrintItems(layout);
     let best = null;
 
-    if (state.printMode === "stack") {
+    if (state.printMode === "stack" && TYPES[state.type] && TYPES[state.type].stackable) {
       const built = buildStacks(items, state.autoRotate, state.bedZ, state.stackGap);
       if (built.error) return built;
       const stackItems = built.stacks.map(function (stack, i) {
@@ -2136,7 +2132,7 @@
                 if (!entry) return;
                 const pw = pi.w || (pi.coreRot ? pi.item.h : pi.item.w);
                 const ph = pi.h || (pi.coreRot ? pi.item.w : pi.item.h);
-                const rot = meshRotFor(entry, pw, ph);
+                const rot = meshRotFor(entry, pi.item.w, pi.item.h);
                 const tx = state.bedMargin + it.x + (pi.dx || 0) + pw / 2;
                 const ty = state.bedMargin + it.y + (pi.dy || 0) + ph / 2;
                 addPlateMesh(plateGeometry(entry), plateMaterial(piece.w, piece.h), entry.bbox, tx, ty, z, rot, pi.sym || 0);
@@ -2252,6 +2248,15 @@
   }
 
   function syncStackControls() {
+    const stackable = !!(TYPES[state.type] && TYPES[state.type].stackable);
+    const stackOption = el.printMode.querySelector('option[value="stack"]');
+    if (stackOption) stackOption.disabled = !stackable;
+    if (!stackable) {
+      state.printMode = "beds";
+      el.printMode.value = "beds";
+    } else {
+      el.printMode.value = state.printMode;
+    }
     el.stackGap.disabled = state.printMode !== "stack";
   }
 
@@ -2607,8 +2612,12 @@
     const t = bb.max[2] - bb.min[2];
     const z0 = bb.min[2];
 
-    const bw = piece.w * state.unit;
-    const bh = piece.h * state.unit;
+    const baseEntry = await getPlateByKey(state.type, baseKey);
+    const baseRot = meshRotFor(baseEntry, piece.w * state.unit, piece.h * state.unit);
+    const baseNativeW = baseEntry.bbox.max[0] - baseEntry.bbox.min[0];
+    const baseNativeH = baseEntry.bbox.max[1] - baseEntry.bbox.min[1];
+    const bw = baseRot ? baseNativeH : baseNativeW;
+    const bh = baseRot ? baseNativeW : baseNativeH;
     const bigW = bb.max[0] - bb.min[0];
     const bigH = bb.max[1] - bb.min[1];
     const ox = needLeft ? (needRight ? (bigW - bw) / 2 : bigW - bw) : 0;
@@ -2723,7 +2732,7 @@
               direct: true,
               directX: state.bedMargin + baseX + (pi.dx || 0),
               directY: state.bedMargin + baseY + (pi.dy || 0),
-              meshRot: meshRotFor(entry, pw, ph),
+              meshRot: meshRotFor(entry, pi.item.w, pi.item.h),
               sym: pi.sym || 0,
               zOffset: stackZ,
               label: (piece.ext ? baseKey + " + bord" : baseKey) + " · pile " + (layerIndex + 1) + "/" + stack.items.length,
@@ -3198,11 +3207,6 @@
     required: function () { return lastRequired; },
     update: update,
     build3mfBlob: build3mfBlob,
-    chooseLayerPlacement: chooseLayerPlacement,
-    makeBaseStack: makeBaseStack,
-    layerFromBest: layerFromBest,
-    listLayerPlacements: listLayerPlacements,
-    edgeMeshes: edgeMeshCache,
     zipEntries: zipEntries,
     libraries: libraries
   };

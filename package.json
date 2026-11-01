@@ -7,7 +7,9 @@
     "tile": "node tile-plates.mjs",
     "manifest": "node make-manifest.js",
     "serve": "python3 -m http.server 8765 --bind 127.0.0.1",
-    "test:matrix": "node tools/test-matrix.mjs"
+    "test:matrix": "node tools/test-matrix.mjs",
+    "test": "node tools/test-expected.mjs",
+    "test:expected": "node tools/test-expected.mjs"
   },
   "devDependencies": {
     "manifold-3d": "^3.5.4",

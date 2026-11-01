@@ -16,7 +16,8 @@ function add(opts) {
   cases.push(Object.assign({
     id: String(n).padStart(3, "0"),
     type: "lite", w: 680, d: 540, max: 5, sym: true, edge: true,
-    mode: "stack", clip: "none", gap: 0.2
+    mode: "stack", clip: "none", gap: 0.2,
+    bedX: 320, bedY: 320, bedZ: 350
   }, opts));
 }
 for (const type of types) {
@@ -35,7 +36,7 @@ for (const type of types) {
 add({ type: "square", w: 680, d: 540, sym: true, edge: true, mode: "stack", clip: "s" });
 add({ type: "lite", w: 680, d: 540, sym: true, edge: true, mode: "stack", clip: "s" });
 add({ type: "lite", w: 680, d: 540, sym: true, edge: true, mode: "stack", max: 4 });
-add({ type: "square", w: 680, d: 540, sym: true, edge: true, mode: "stack", max: 6 });
+add({ type: "square", w: 680, d: 540, sym: true, edge: true, mode: "stack", max: 6, bedX: 350, bedY: 350, bedZ: 336 });
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -55,12 +56,12 @@ async function setCase(c) {
       el.value = String(v);
       el.dispatchEvent(new Event("input", { bubbles: true }));
     };
+    const t = document.getElementById("ptype"); t.value = c.type; t.dispatchEvent(new Event("change", { bubbles: true }));
     set("w", c.w); set("d", c.d); set("clearance", 2); set("maxSize", c.max);
-    set("bedX", 320); set("bedY", 320); set("bedZ", 350);
+    set("bedX", c.bedX); set("bedY", c.bedY); set("bedZ", c.bedZ);
     set("printMode", c.mode); set("stackGap", c.gap); set("clipType", c.clip);
     const es = document.getElementById("edgeFill"); es.checked = !!c.edge; es.dispatchEvent(new Event("change", { bubbles: true }));
     const sy = document.getElementById("symmetric"); sy.checked = !!c.sym; sy.dispatchEvent(new Event("change", { bubbles: true }));
-    const t = document.getElementById("ptype"); t.value = c.type; t.dispatchEvent(new Event("change", { bubbles: true }));
   }, c);
   await new Promise((r) => setTimeout(r, 1800));
 }

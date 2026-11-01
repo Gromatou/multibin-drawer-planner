@@ -1,4 +1,4 @@
-# MultiBin Drawer Planner
+# MultiBin & MultiBuild Planner
 
 Un planificateur de tiroirs pour plaques **MultiBin / MultiBuild**, avec aperçu 2D, aperçu 3D des STL et export **3MF multi-plateaux** pour Bambu Studio / OrcaSlicer.
 
@@ -22,15 +22,15 @@ Je précise que j'aime le système MultiBuild/MultiBoard et que ce n'est **pas u
 - Aperçu 2D avec le motif réel, les dimensions et les bords.
 - **Aperçu 3D** des maillages STL réels dans l'app (rotation/zoom), sans passer par Orca.
 - **Clips adhésifs S** (VHB Bolt-Lock) : choix « Aucun clip » / « Clips adhésifs S », comptage automatique **Quad / Dual / Single** aux angles des plaques, repères dans l'aperçu 2D, maillages réels dans la 3D, et ajout automatique sur les plateaux d'impression.
-- **Empilement « Ironing Stack »** : les plaques sont empilées dans le 3MF, la plus grande en bas, les plus petites au-dessus, avec un **espacement réglable (0,2 mm par défaut)**. L’algorithme cherche parmi les 8 symétries la position qui **conserve la grille de 50 mm et garde chaque couche entièrement dans la couche inférieure**, extensions de bord incluses. Les **origines de grille sont alignées sur la même trame de 50 mm** (pas un simple centrage) pour que les trous coïncident. Le **2D montre l’orientation de montage dans le tiroir** ; le **3DF/3MF impriment les pièces dans une orientation canonique identique** : les quatre 5×5 et les deux 3×5 sont les mêmes pièces, à tourner au montage si nécessaire. Le slicer fait le reste ; active l'ironing des surfaces supérieures.
+- **Empilement « Ironing Stack » (MultiBuild Square uniquement)** : les plaques sont empilées dans le 3MF, la plus grande en bas, les plus petites au-dessus, avec un **espacement réglable (0,2 mm par défaut)**. Les plaques **MultiBin Base/Lite** ne sont pas empilables : leur relief l’interdit, elles restent sur plateaux séparés. L’algorithme cherche parmi les 8 symétries la position qui **conserve la grille de 50 mm et garde chaque couche entièrement dans la couche inférieure**, extensions de bord incluses. Les **origines de grille sont alignées sur la même trame de 50 mm** (pas un simple centrage) pour que les trous coïncident. Le **2D montre l’orientation de montage dans le tiroir** ; le **3DF/3MF impriment les pièces dans une orientation canonique identique** : les quatre 5×5 et les deux 3×5 sont les mêmes pièces, à tourner au montage si nécessaire. Le slicer fait le reste ; active l'ironing des surfaces supérieures.
 - Export **3MF projet multi-plateaux** Bambu Studio / OrcaSlicer.
 - Export CSV et copie de la liste.
 - Chargement automatique des plaques depuis un serveur local : pas d'import manuel.
 
 ## Plaques prises en charge
 
-- **Square Plate** : 2×1 → 10×10 CU.
-- **Base Plate** et **Lite Panel** : 2×2 → 10×10 CU, générées à partir d'une référence 3×3.
+- **MultiBuild / MultiBoard Square Plate** : 2×1 → 10×10 CU, empilable.
+- **MultiBin Base Plate** et **Lite Panel** : 2×2 → 10×10 CU, générées à partir d'une référence 3×3 ; **non empilables** (relief).
 
 Limites : le 1×1 n'existe pas dans le générateur officiel ; les plaques Base/Lite ne sont pas générées en 1×N (le plan utilise des plaques ≥ 2×2). Une plaque de bord a besoin d'une plaque d'une cellule plus grande pour être coupée : une plaque 10×10 avec bord demanderait du 11×11, non disponible.
 
@@ -117,7 +117,7 @@ Ouvre ensuite **http://127.0.0.1:8765/**.
 2. Choisis le type de plaque et la taille maximale.
 3. Active éventuellement **Symétrie** et **Plaques de bord étendues**.
 4. Choisis les **clips** (ou « Aucun clip »). Les quantités Quad/Dual/Single sont calculées aux angles des plaques.
-5. Choisis **Impression : Empiler — Ironing Stack** si tu veux imprimer toutes les plaques en piles (la plus grande en bas, les plus petites au-dessus). Règle l'espacement (0,2 mm par défaut).
+5. Pour une grille **MultiBuild Square**, choisis **Impression : Empiler — Ironing Stack (MultiBuild)** si tu veux imprimer les plaques en piles (la plus grande en bas, les plus petites au-dessus). Règle l'espacement (0,2 mm par défaut). Pour **MultiBin Base/Lite**, le mode reste sur plateaux séparés.
 6. Vérifie l'aperçu 2D / la 3D de la pile, puis **Télécharger le 3MF multi-plateaux** (plaques + clips).
 7. Pour voir les vrais maillages : **Afficher la vue 3D** (glisser pour tourner, molette pour zoomer).
 

@@ -74,7 +74,12 @@ for (const type of ["square", "base", "lite"]) {
       const key = Math.min(a, b) + "x" + Math.max(a, b);
       const existing = map.get(key);
       if (!existing || lower.endsWith(".mesh")) {
-        map.set(key, { key, a: Math.min(a, b), b: Math.max(a, b), file: name });
+        map.set(key, {
+          key, a: Math.min(a, b), b: Math.max(a, b),
+          w: Math.round((bb.max[0] - bb.min[0]) * 100) / 100,
+          h: Math.round((bb.max[1] - bb.min[1]) * 100) / 100,
+          file: name
+        });
       }
     } catch (e) {
       console.warn("Ignoré :", name, e.message);
