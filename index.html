@@ -272,7 +272,6 @@
           <select class="input" id="clipType">
             <option value="none">Aucun clip</option>
             <option value="s">Clips adhésifs S</option>
-            <option value="xs" disabled>Clips adhésifs XS (bientôt)</option>
           </select>
         </div>
         <p class="hint" style="margin:-8px 0 0">Quad aux 4 angles, Dual à 2, Single à 1. Les clips sont ajoutés aux plateaux et à la 3D.</p>
@@ -1247,6 +1246,13 @@
       el.fitBadge.className = "badge warn";
       el.fitBadge.textContent = "Reste " + round1(left) + " mm";
     }
+  }
+
+  function syncClipOptions() {
+    const current = CLIP_SETS[state.clipType] ? state.clipType : "none";
+    el.clipType.innerHTML = Object.keys(CLIP_SETS).map(function (id) {
+      return '<option value="' + id + '"' + (id === current ? ' selected' : '') + '>' + esc(CLIP_SETS[id].label) + '</option>';
+    }).join("");
   }
 
   function renderType() {
@@ -2721,6 +2727,7 @@
     libraries: libraries
   };
 
+  syncClipOptions();
   writeInputs();
   update();
   initAutoLoad();

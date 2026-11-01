@@ -92,7 +92,7 @@ stls/clips/s/dual.stl
 stls/clips/s/single.stl
 ```
 
-J'utilise les **Bolt-Lock VHB Tape Mount** (6,25 mm) : quad 50×50, dual 25×50, single 25×25. Ces fichiers ne sont pas inclus dans le dépôt (licence MultiBuild). Pour ajouter les **XS** ensuite : crée `stls/clips/xs/` avec les trois STL et ajoute le set `xs` dans `CLIP_SETS` (`index.html`).
+J'utilise les **Bolt-Lock VHB Tape Mount** (6,25 mm) : quad 50×50, dual 25×50, single 25×25. Ces fichiers ne sont pas inclus dans le dépôt (licence MultiBuild). Pour ajouter les **XS** ensuite : crée `stls/clips/xs/` avec les trois STL et ajoute le set `xs` dans `CLIP_SETS` (`index.html`) ; le menu « Clips » se met à jour automatiquement.
 
 ### 2. Lancer l'outil
 
