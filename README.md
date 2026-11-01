@@ -2,6 +2,8 @@
 
 Un planificateur de tiroirs pour plaques **MultiBin / MultiBuild**, avec aperçu 2D, aperçu 3D des STL et export **3MF multi-plateaux** pour Bambu Studio / OrcaSlicer.
 
+**Démo en ligne (2D)** : https://gromatou.github.io/multibin-drawer-planner/ — la 3D, le 3MF et les STL nécessitent l’application locale et tes fichiers MultiBuild.
+
 ![Aperçu du planificateur](docs/drawer.png)
 
 ## Pourquoi ce projet ?

@@ -471,6 +471,7 @@
 <script>
 (function () {
   const STORAGE_KEY = "multibin-square-plate-generator-v1";
+  const IS_PUBLIC_DEMO = /(^|\.)github\.io$/.test(location.hostname);
 
   const TYPES = {
     square: { label: "MultiBuild Square Plate", color: "#f59e0b", stackable: true },
@@ -3212,6 +3213,22 @@
   };
 
   syncClipOptions();
+  if (IS_PUBLIC_DEMO) {
+    const view3d = document.getElementById("view3dCard");
+    const printCard = document.getElementById("printCard");
+    if (view3d) view3d.style.display = "none";
+    if (printCard) printCard.style.display = "none";
+    const banner = document.createElement("div");
+    banner.innerHTML = "<b>Démo GitHub Pages — aperçu 2D.</b> La 3D, le 3MF et les STL nécessitent l’application locale : clone le dépôt, place tes fichiers MultiBuild dans <code>stls/</code> et lance <code>serve.command</code>.";
+    Object.assign(banner.style, {
+      position: "sticky", top: "0", zIndex: "9999", textAlign: "center",
+      padding: "10px 16px", background: "#0e3a5f", color: "#dbeafe",
+      borderBottom: "1px solid #245d8c",
+      font: "600 13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+    });
+    document.body.prepend(banner);
+  }
+
   writeInputs();
   update();
   initAutoLoad();
