@@ -81,8 +81,8 @@ async function info() {
           let baseCoreX = it.x + stack.base.gx;
           let baseCoreY = it.y + stack.base.gy;
           stack.items.forEach((pi, idx) => {
-            const pw = pi.coreRot ? pi.item.h : pi.item.w;
-            const ph = pi.coreRot ? pi.item.w : pi.item.h;
+            const pw = pi.w || (pi.coreRot ? pi.item.h : pi.item.w);
+            const ph = pi.h || (pi.coreRot ? pi.item.w : pi.item.h);
             const x = it.x + (pi.dx || 0);
             const y = it.y + (pi.dy || 0);
             const coreX = x + (pi.gx || 0);
