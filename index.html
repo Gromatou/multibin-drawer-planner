@@ -1501,8 +1501,12 @@
     return layout.pieces.map(function (p, i) {
       return {
         id: i, a: p.w, b: p.h,
+        cw: p.w,
+        ch: p.h,
         w: p.ext ? p.ext.wmm : p.w * state.unit,
         h: p.ext ? p.ext.hmm : p.h * state.unit,
+        gx: p.ext ? p.ext.left : 0,
+        gy: p.ext ? p.ext.top : 0,
         piece: p,
         thickness: PLATE_THICKNESS[state.type] || 6.2,
         fixed: !!p.ext
@@ -1510,15 +1514,14 @@
     });
   }
 
-  function stackFit(item, base, allowRotate) {
-    if (item.w <= base.w + 1e-6 && item.h <= base.h + 1e-6) return 0;
-    if (allowRotate && item.h <= base.w + 1e-6 && item.w <= base.h + 1e-6) return 1;
+  function stackFit(item, base) {
+    if (item.cw <= base.cw + 1e-6 && item.ch <= base.ch + 1e-6) return 0;
     return -1;
   }
 
   function buildStacks(items, allowRotate, maxHeight, gap) {
     const sorted = items.slice().sort(function (x, y) {
-      return (y.w * y.h - x.w * x.h) || (Math.max(y.w, y.h) - Math.max(x.w, x.h)) || (Math.min(y.w, y.h) - Math.min(x.w, x.h));
+      return (y.cw * y.ch - x.cw * x.ch) || (Math.max(y.cw, y.ch) - Math.max(x.cw, x.ch)) || (Math.min(y.cw, y.ch) - Math.min(x.cw, x.ch));
     });
     const stacks = [];
     for (let i = 0; i < sorted.length; i++) {
@@ -1526,10 +1529,13 @@
       let placed = false;
       for (let si = 0; si < stacks.length; si++) {
         const stack = stacks[si];
-        const rot = stackFit(item, stack, allowRotate);
-        if (rot < 0) continue;
+        if (stackFit(item, stack) < 0) continue;
         if (maxHeight && stack.height + gap + item.thickness > maxHeight + 1e-6) continue;
-        stack.items.push({ item: item, rot: rot });
+        const oxCells = Math.round((stack.cw - item.cw) / 2);
+        const oyCells = Math.round((stack.ch - item.ch) / 2);
+        const dx = (stack.base.gx + oxCells * state.unit) - item.gx;
+        const dy = (stack.base.gy + oyCells * state.unit) - item.gy;
+        stack.items.push({ item: item, rot: 0, dx: dx, dy: dy });
         stack.height += gap + item.thickness;
         placed = true;
         break;
@@ -1540,10 +1546,12 @@
       }
       stacks.push({
         base: item,
+        cw: item.cw,
+        ch: item.ch,
         w: item.w,
         h: item.h,
         height: item.thickness,
-        items: [{ item: item, rot: 0 }]
+        items: [{ item: item, rot: 0, dx: 0, dy: 0 }]
       });
     }
     return { stacks: stacks };
@@ -1796,12 +1804,20 @@
       notice += " Grille remplie au maximum : le jeu réel (" + round1(Math.min(layout.leftoverW, layout.leftoverD)) + " mm) est inférieur au jeu demandé (" + round1(state.clearance) + " mm).";
     }
     if (stackCount) {
-      notice += " Empilement : " + stackCount + " pile" + (stackCount > 1 ? "s" : "") + ", espacement " + round1(state.stackGap) + " mm. Active l'ironing des surfaces supérieures dans Orca/Bambu.";
+      notice += " Empilement : " + stackCount + " pile" + (stackCount > 1 ? "s" : "") + ", espacement " + round1(state.stackGap) + " mm, grilles alignées sur la même trame de 50 mm. Active l'ironing des surfaces supérieures dans Orca/Bambu.";
     }
     el.notice.textContent = notice;
   }
 
   let threeViewer = null;
+
+  function meshRotFor(entry, w, h) {
+    const nw = entry.bbox.max[0] - entry.bbox.min[0];
+    const nh = entry.bbox.max[1] - entry.bbox.min[1];
+    if (Math.abs(nw - w) <= 1.5 && Math.abs(nh - h) <= 1.5) return 0;
+    if (Math.abs(nh - w) <= 1.5 && Math.abs(nw - h) <= 1.5) return 1;
+    return 0;
+  }
 
   async function render3D() {
     if (!lastResult || !lastResult.ok) { toast("Configure d'abord le tiroir"); return; }
@@ -1915,14 +1931,14 @@
           bin.items.forEach(function (it) {
             if (it.item.stack) {
               const stack = it.item.stack;
-              const tx = state.bedMargin + it.x + it.w / 2;
-              const ty = state.bedMargin + it.y + it.h / 2;
               let z = 0;
               stack.items.forEach(function (pi) {
                 const piece = pi.item.piece;
                 const entry = piece.ext ? edgeMeshCache.get(edgeKey(piece)) : lib.get(sizeKey(piece.w, piece.h));
                 if (!entry) return;
-                const rot = pi.rot;
+                const rot = meshRotFor(entry, pi.item.w, pi.item.h);
+                const tx = state.bedMargin + it.x + (pi.dx || 0) + pi.item.w / 2;
+                const ty = state.bedMargin + it.y + (pi.dy || 0) + pi.item.h / 2;
                 addRotatedMesh(plateGeometry(entry), plateMaterial(piece.w, piece.h), entry.bbox, tx, ty, z, rot);
                 z += (entry.bbox.max[2] - entry.bbox.min[2]) + state.stackGap;
               });
@@ -1946,15 +1962,13 @@
           if (!entry) return;
           const geo = plateGeometry(entry);
           const material = plateMaterial(p.w, p.h);
-          const mesh = new THREE.Mesh(geo, material);
           const bb = entry.bbox;
-          const cx = (bb.min[0] + bb.max[0]) / 2;
-          const cy = (bb.min[1] + bb.max[1]) / 2;
-          const tx = p.ext ? p.ext.xmm + p.ext.wmm / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
-          const ty = p.ext ? p.ext.ymm + p.ext.hmm / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
-          mesh.position.set(tx - cx, ty - cy, -bb.min[2]);
+          const plateW = p.ext ? p.ext.wmm : p.w * state.unit;
+          const plateH = p.ext ? p.ext.hmm : p.h * state.unit;
+          const tx = p.ext ? p.ext.xmm + plateW / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
+          const ty = p.ext ? p.ext.ymm + plateH / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
+          addRotatedMesh(geo, material, bb, tx, ty, 0, meshRotFor(entry, plateW, plateH));
           plateTop = Math.max(plateTop, bb.max[2] - bb.min[2]);
-          scene.add(mesh);
         });
 
         if (hasClips) {
@@ -2478,19 +2492,15 @@
               meshIndex.set(key, meshes.length + 1);
               meshes.push({ key: key, entry: entry });
             }
-            const rot = pi.rot ? 1 : 0;
-            const instW = rot ? pi.item.h : pi.item.w;
-            const instH = rot ? pi.item.w : pi.item.h;
             instances.push({
               bin: binIndex,
-              x: baseX + (baseW - instW) / 2,
-              y: baseY + (baseH - instH) / 2,
-              w: instW,
-              h: instH,
+              x: baseX + (pi.dx || 0),
+              y: baseY + (pi.dy || 0),
+              w: pi.item.w,
+              h: pi.item.h,
               entry: entry,
               mesh: meshIndex.get(key),
               ext: !!piece.ext,
-              rotExplicit: rot,
               zOffset: stackZ,
               label: (piece.ext ? baseKey + " + bord" : baseKey) + " · pile " + (layerIndex + 1) + "/" + stack.items.length,
               wid: 2 + instanceId * 2,
@@ -2578,7 +2588,6 @@
 
       let rot = 0;
       if (inst.rotExplicit !== undefined) rot = inst.rotExplicit;
-      else if (inst.ext) rot = 0;
       else if (Math.abs(nativeW - inst.w) <= 1.5 && Math.abs(nativeH - inst.h) <= 1.5) rot = 0;
       else if (Math.abs(nativeH - inst.w) <= 1.5 && Math.abs(nativeW - inst.h) <= 1.5) rot = 1;
       else rot = nativeW > nativeH && inst.w < inst.h ? 1 : 0;
