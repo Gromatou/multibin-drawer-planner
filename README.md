@@ -22,6 +22,7 @@ Je précise que j'aime le système MultiBuild/MultiBoard et que ce n'est **pas u
 - Aperçu 2D avec le motif réel, les dimensions et les bords.
 - **Aperçu 3D** des maillages STL réels dans l'app (rotation/zoom), sans passer par Orca.
 - **Clips adhésifs S** (VHB Bolt-Lock) : choix « Aucun clip » / « Clips adhésifs S », comptage automatique **Quad / Dual / Single** aux angles des plaques, repères dans l'aperçu 2D, maillages réels dans la 3D, et ajout automatique sur les plateaux d'impression.
+- **Empilement « Ironing Stack »** : les plaques sont empilées dans le 3MF, la plus grande en bas, les plus petites au-dessus, avec un **espacement réglable (0,2 mm par défaut)**. Le slicer fait le reste ; active l'ironing des surfaces supérieures.
 - Export **3MF projet multi-plateaux** Bambu Studio / OrcaSlicer.
 - Export CSV et copie de la liste.
 - Chargement automatique des plaques depuis un serveur local : pas d'import manuel.
@@ -35,9 +36,9 @@ Limites : le 1×1 n'existe pas dans le générateur officiel ; les plaques Base/
 
 ## Captures
 
-| Planificateur 2D | Aperçu 3D |
-|---|---|
-| ![Planificateur](docs/drawer.png) | ![Aperçu 3D](docs/3d.png) |
+| Planificateur 2D | Aperçu 3D | Pile d'impression |
+|---|---|---|
+| ![Planificateur](docs/drawer.png) | ![Aperçu 3D](docs/3d.png) | ![Pile](docs/stack.png) |
 
 ## Ce qui n'est pas inclus
 
@@ -114,10 +115,13 @@ Ouvre ensuite **http://127.0.0.1:8765/**.
 2. Choisis le type de plaque et la taille maximale.
 3. Active éventuellement **Symétrie** et **Plaques de bord étendues**.
 4. Choisis les **clips** (ou « Aucun clip »). Les quantités Quad/Dual/Single sont calculées aux angles des plaques.
-5. Vérifie l'aperçu 2D, puis **Télécharger le 3MF multi-plateaux** (plaques + clips).
-6. Pour voir les vrais maillages : **Afficher la vue 3D** (glisser pour tourner, molette pour zoomer).
+5. Choisis **Impression : Empiler — Ironing Stack** si tu veux imprimer toutes les plaques en piles (la plus grande en bas, les plus petites au-dessus). Règle l'espacement (0,2 mm par défaut).
+6. Vérifie l'aperçu 2D / la 3D de la pile, puis **Télécharger le 3MF multi-plateaux** (plaques + clips).
+7. Pour voir les vrais maillages : **Afficher la vue 3D** (glisser pour tourner, molette pour zoomer).
 
 Le 3MF ne contient volontairement pas de `project_settings.config` : dans Orca, il faut sélectionner le bon profil imprimante, et les dimensions de plateau saisies dans l'app doivent correspondre à celles du profil.
+
+Pour l'**Ironing Stack**, active dans le slicer l'**ironing des surfaces supérieures** (top surfaces) : l'espacement de 0,2 mm est déjà encodé dans les transformations Z du 3MF. Les plaques restent des objets séparés ; c'est le slicer qui gère l'impression couche par couche et le pont au-dessus de l'espace.
 
 ## Testé avec
 
@@ -126,6 +130,7 @@ Le 3MF ne contient volontairement pas de `project_settings.config` : dans Orca, 
 - Firefox et Chrome
 - Maillages vérifiés `manifold = yes` dans Orca
 - Clips S : quad / dual / single ajoutés au 3MF et visibles dans la 3D
+- Ironing Stack : plaques empilées avec 0,2 mm d'espacement, transformées en Z dans le 3MF
 
 ## Licence et crédits
 

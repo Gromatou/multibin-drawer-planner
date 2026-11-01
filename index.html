@@ -312,6 +312,20 @@
             </select>
           </div>
         </div>
+        <div class="row2">
+          <div class="field">
+            <label for="printMode">Impression <span class="hint">mode</span></label>
+            <select class="input" id="printMode">
+              <option value="beds">Plateaux séparés</option>
+              <option value="stack">Empiler — Ironing Stack</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="stackGap">Espacement pile <span class="hint">mm</span></label>
+            <input class="input" id="stackGap" type="number" min="0.05" step="0.05" value="0.2" disabled>
+          </div>
+        </div>
+        <p class="hint" style="margin:-8px 0 0">La plus grande plaque en bas, les plus petites au-dessus. Active l'ironing des surfaces supérieures dans le slicer.</p>
         <label class="check"><input type="checkbox" id="limitToBed" checked> Limiter les plaques au plateau</label>
 
         <div class="divider"></div>
@@ -350,7 +364,7 @@
         <div class="preview" id="view3dWrap">
           <span class="muted" id="view3dMsg">Vue générée à partir des STL chargés, bords continus inclus. Clique sur « Afficher ».</span>
         </div>
-        <p class="notice">Glisse pour tourner, molette pour zoomer. La vue utilise les maillages réels (pas une image Orca).</p>
+        <p class="notice">Glisse pour tourner, molette pour zoomer. La vue utilise les maillages réels (pas une image Orca). En mode Empiler, elle montre le plateau 1 avec les piles.</p>
       </section>
 
       <section class="card pad" id="printCard">
@@ -464,6 +478,8 @@
     lite: { label: "Lite Panel", color: "#34d399" }
   };
 
+  const PLATE_THICKNESS = { square: 6.2, base: 10, lite: 2.4 };
+
   const CLIP_ORDER = ["quad", "dual", "single"];
   const CLIP_COLORS = { quad: "#f59e0b", dual: "#38bdf8", single: "#a78bfa" };
   const CLIP_SETS = {
@@ -519,6 +535,8 @@
     bedMargin: document.getElementById("bedMargin"),
     gap: document.getElementById("gap"),
     autoRotate: document.getElementById("autoRotate"),
+    printMode: document.getElementById("printMode"),
+    stackGap: document.getElementById("stackGap"),
     limitToBed: document.getElementById("limitToBed"),
     statBeds: document.getElementById("statBeds"),
     statPieces: document.getElementById("statPieces"),
@@ -569,6 +587,8 @@
       bedMargin: 5,
       gap: 3,
       autoRotate: true,
+      printMode: "beds",
+      stackGap: 0.2,
       limitToBed: true
     };
     try {
@@ -604,6 +624,8 @@
     state.bedMargin = clampNumber(el.bedMargin.value, 0, 100, 5);
     state.gap = clampNumber(el.gap.value, 0, 50, 3);
     state.autoRotate = el.autoRotate.value === "1";
+    state.printMode = el.printMode.value === "stack" ? "stack" : "beds";
+    state.stackGap = clampNumber(el.stackGap.value, 0.05, 10, 0.2);
     state.limitToBed = el.limitToBed.checked;
     state.type = TYPES[el.ptype.value] ? el.ptype.value : "square";
   }
@@ -624,6 +646,8 @@
     el.bedMargin.value = state.bedMargin;
     el.gap.value = state.gap;
     el.autoRotate.value = state.autoRotate ? "1" : "0";
+    el.printMode.value = state.printMode;
+    el.stackGap.value = state.stackGap;
     el.limitToBed.checked = state.limitToBed;
     el.ptype.value = state.type;
   }
@@ -1434,7 +1458,7 @@
         const bin = { free: [{ x: 0, y: 0, w: binW, h: binH }], items: [] };
         const pos = findPosition(bin, item, gap, allowRotate);
         if (!pos) {
-          return { error: "La pièce " + (item.ext ? "extension" : sizeKey(item.a, item.b)) + " (" + (item.w) + "×" + (item.h) + " mm) ne tient pas sur le plateau." };
+          return { error: "La pièce " + (item.label || (item.ext ? "extension" : sizeKey(item.a, item.b))) + " (" + (item.w) + "×" + (item.h) + " mm) ne tient pas sur le plateau." };
         }
         bins.push(bin);
         bin.items.push({ item: item, x: pos.x, y: pos.y, w: pos.w, h: pos.h, rot: pos.rot });
@@ -1473,24 +1497,125 @@
     return best;
   }
 
-  function packAll(layout) {
-    const binW = state.bedX - 2 * state.bedMargin;
-    const binH = state.bedY - 2 * state.bedMargin;
-    if (binW <= 0 || binH <= 0) return { error: "Marge de plateau trop grande." };
-    const items = layout.pieces.map(function (p, i) {
+  function platePrintItems(layout) {
+    return layout.pieces.map(function (p, i) {
       return {
         id: i, a: p.w, b: p.h,
         w: p.ext ? p.ext.wmm : p.w * state.unit,
         h: p.ext ? p.ext.hmm : p.h * state.unit,
         piece: p,
+        thickness: PLATE_THICKNESS[state.type] || 6.2,
         fixed: !!p.ext
       };
     });
+  }
+
+  function stackFit(item, base, allowRotate) {
+    if (item.w <= base.w + 1e-6 && item.h <= base.h + 1e-6) return 0;
+    if (allowRotate && item.h <= base.w + 1e-6 && item.w <= base.h + 1e-6) return 1;
+    return -1;
+  }
+
+  function buildStacks(items, allowRotate, maxHeight, gap) {
+    const sorted = items.slice().sort(function (x, y) {
+      return (y.w * y.h - x.w * x.h) || (Math.max(y.w, y.h) - Math.max(x.w, x.h)) || (Math.min(y.w, y.h) - Math.min(x.w, x.h));
+    });
+    const stacks = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const item = sorted[i];
+      let placed = false;
+      for (let si = 0; si < stacks.length; si++) {
+        const stack = stacks[si];
+        const rot = stackFit(item, stack, allowRotate);
+        if (rot < 0) continue;
+        if (maxHeight && stack.height + gap + item.thickness > maxHeight + 1e-6) continue;
+        stack.items.push({ item: item, rot: rot });
+        stack.height += gap + item.thickness;
+        placed = true;
+        break;
+      }
+      if (placed) continue;
+      if (maxHeight && item.thickness > maxHeight + 1e-6) {
+        return { error: "Plaque " + item.w + "×" + item.h + " mm : épaisseur " + round1(item.thickness) + " mm supérieure à la hauteur du plateau." };
+      }
+      stacks.push({
+        base: item,
+        w: item.w,
+        h: item.h,
+        height: item.thickness,
+        items: [{ item: item, rot: 0 }]
+      });
+    }
+    return { stacks: stacks };
+  }
+
+  function addClipsToPack(best, layout, binW, binH) {
+    const clipSet = selectedClipSet();
+    if (!clipSet || clipSet.id === "none" || !layout.clipCounts || !layout.clipCounts.total) return best;
+    const clipItems = [];
+    CLIP_ORDER.forEach(function (type) {
+      const part = clipSet.parts[type];
+      const count = layout.clipCounts[type] || 0;
+      for (let i = 0; i < count; i++) {
+        clipItems.push({
+          id: "clip:" + type + ":" + i,
+          isClip: true,
+          clipType: type,
+          a: part.w,
+          b: part.h,
+          w: part.w,
+          h: part.h,
+          label: part.short,
+          fixed: false
+        });
+      }
+    });
+    if (clipItems.length) {
+      const res = packClips(best, clipItems, binW, binH, state.gap, state.autoRotate);
+      if (res.error) return res;
+      best.clipCount = clipItems.length;
+    }
+    return best;
+  }
+
+  function packAll(layout) {
+    const binW = state.bedX - 2 * state.bedMargin;
+    const binH = state.bedY - 2 * state.bedMargin;
+    if (binW <= 0 || binH <= 0) return { error: "Marge de plateau trop grande." };
+    const items = platePrintItems(layout);
+    let best = null;
+
+    if (state.printMode === "stack") {
+      const built = buildStacks(items, state.autoRotate, state.bedZ, state.stackGap);
+      if (built.error) return built;
+      const stackItems = built.stacks.map(function (stack, i) {
+        return {
+          id: "stack:" + i,
+          a: Math.max(1, Math.round(stack.w / state.unit)),
+          b: Math.max(1, Math.round(stack.h / state.unit)),
+          w: stack.w,
+          h: stack.h,
+          stack: stack,
+          fixed: true,
+          label: "Pile de " + stack.items.length
+        };
+      });
+      const res = packOrder(stackItems, binW, binH, state.gap, false);
+      if (res.error) return res;
+      best = res;
+      best.mode = "stack";
+      best.stacks = built.stacks;
+      best.binW = binW;
+      best.binH = binH;
+      best.plateCount = layout.pieces.length;
+      best.clipCount = 0;
+      return addClipsToPack(best, layout, binW, binH);
+    }
+
     const byArea = items.slice().sort(function (x, y) { return (y.w * y.h - x.w * x.h) || (Math.max(y.w, y.h) - Math.max(x.w, x.h)); });
     const byLong = items.slice().sort(function (x, y) { return (Math.max(y.w, y.h) - Math.max(x.w, x.h)) || (y.w * y.h - x.w * x.h); });
     const byShort = items.slice().sort(function (x, y) { return (Math.min(y.w, y.h) - Math.min(x.w, x.h)) || (y.w * y.h - x.w * x.h); });
     const orders = [byArea, byLong, byShort];
-    let best = null;
     for (let i = 0; i < orders.length; i++) {
       const res = packOrder(orders[i], binW, binH, state.gap, state.autoRotate);
       if (res.error) return res;
@@ -1498,36 +1623,10 @@
     }
     best.binW = binW;
     best.binH = binH;
+    best.mode = "beds";
     best.plateCount = layout.pieces.length;
     best.clipCount = 0;
-
-    const clipSet = selectedClipSet();
-    if (clipSet && clipSet.id !== "none" && layout.clipCounts && layout.clipCounts.total) {
-      const clipItems = [];
-      CLIP_ORDER.forEach(function (type) {
-        const part = clipSet.parts[type];
-        const count = layout.clipCounts[type] || 0;
-        for (let i = 0; i < count; i++) {
-          clipItems.push({
-            id: "clip:" + type + ":" + i,
-            isClip: true,
-            clipType: type,
-            a: part.w,
-            b: part.h,
-            w: part.w,
-            h: part.h,
-            label: part.short,
-            fixed: false
-          });
-        }
-      });
-      if (clipItems.length) {
-        const res = packClips(best, clipItems, binW, binH, state.gap, state.autoRotate);
-        if (res.error) return res;
-        best.clipCount = clipItems.length;
-      }
-    }
-    return best;
+    return addClipsToPack(best, layout, binW, binH);
   }
 
   function renderBeds(pack) {
@@ -1552,9 +1651,14 @@
           : paletteFor(it.item.a * it.item.b);
         const gap = Math.min(1.2, Math.min(it.w, it.h) * 0.02);
         parts.push('<rect x="' + (x + gap / 2) + '" y="' + (y + gap / 2) + '" width="' + Math.max(0, it.w - gap) + '" height="' + Math.max(0, it.h - gap) + '" rx="1.2" fill="' + pal.fill + '" stroke="' + pal.stroke + '" stroke-width="0.9" vector-effect="non-scaling-stroke"/>');
+        if (it.item.stack) {
+          const inset = Math.min(it.w, it.h) * 0.18;
+          parts.push('<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + Math.max(0, it.w - inset * 2) + '" height="' + Math.max(0, it.h - inset * 2) + '" rx="1" fill="none" stroke="#0b1020" stroke-width="1" stroke-dasharray="3 2" opacity="0.6"/>');
+          parts.push('<path d="M ' + (x + it.w * 0.18) + ' ' + (y + it.h * 0.5) + ' l ' + (it.w * 0.12) + ' -' + (it.h * 0.08) + ' l 0 ' + (it.h * 0.16) + ' z" fill="#0b1020" opacity="0.55"/>');
+        }
         const fs = Math.min(15, Math.max(6, Math.min(it.w, it.h) * 0.22));
         if (fs >= 6 && it.w > fs * 2.2 && it.h > fs * 1.6) {
-          const label = it.item.isClip ? it.item.label : (it.item.a + '×' + it.item.b);
+          const label = it.item.isClip ? it.item.label : (it.item.stack ? '×' + it.item.stack.items.length : (it.item.a + '×' + it.item.b));
           parts.push('<text x="' + (x + it.w / 2) + '" y="' + (y + it.h / 2 + fs * 0.36) + '" text-anchor="middle" font-size="' + fs.toFixed(1) + '" font-weight="800" fill="#0b1020">' + label + '</text>');
         }
       });
@@ -1562,7 +1666,9 @@
       const used = bin.items.reduce(function (s, it) { return s + it.w * it.h; }, 0);
       const util = Math.round(used / (pack.binW * pack.binH) * 100);
       const clipCount = bin.items.filter(function (it) { return it.item.isClip; }).length;
-      const labelPieces = bin.items.length + ' pièce' + (bin.items.length > 1 ? 's' : '') + (clipCount ? ' dont ' + clipCount + ' clip' + (clipCount > 1 ? 's' : '') : '');
+      const stackCount = bin.items.filter(function (it) { return it.item.stack; }).length;
+      const plateCount = bin.items.reduce(function (s, it) { return s + (it.item.stack ? it.item.stack.items.length : (it.item.isClip ? 0 : 1)); }, 0);
+      const labelPieces = plateCount + ' plaque' + (plateCount > 1 ? 's' : '') + (stackCount ? ' · ' + stackCount + ' pile' + (stackCount > 1 ? 's' : '') : '') + (clipCount ? ' · ' + clipCount + ' clip' + (clipCount > 1 ? 's' : '') : '');
       return '<div class="bed-card">' + parts.join("") +
         '<div class="bed-cap"><span>Plateau <b>' + (idx + 1) + '</b></span><span>' + labelPieces + ' · ' + util + '%</span></div>' +
         '</div>';
@@ -1595,7 +1701,7 @@
     const ready = required.filter(function (r) { return lib.has(r.key); });
     const missing = required.filter(function (r) { return !lib.has(r.key); });
     const clipSet = selectedClipSet();
-    const clipCount = (layout.clipCounts && layout.clipCounts.total) || 0;
+    const clipCount = clipSet.id !== "none" && layout.clipCounts ? (layout.clipCounts.total || 0) : 0;
     const clipsSelected = clipSet.id !== "none" && clipCount > 0;
     const clipsReady = !clipsSelected || clipMeshReady(clipSet);
 
@@ -1607,9 +1713,10 @@
     }
     lastPack = pack;
     renderBeds(pack);
+    const stackCount = !pack.error && pack.mode === "stack" && pack.stacks ? pack.stacks.length : 0;
 
     el.statBeds.innerHTML = pack.error ? "—" : pack.bins.length + ' <small>plateau' + (pack.bins.length > 1 ? 'x' : '') + '</small>';
-    el.statPieces.innerHTML = layout.pieces.length + ' <small>plaques</small>' + (clipCount ? ' + ' + clipCount + ' <small>clips</small>' : '');
+    el.statPieces.innerHTML = layout.pieces.length + ' <small>plaques</small>' + (stackCount ? ' · ' + stackCount + ' <small>pile' + (stackCount > 1 ? 's' : '') + '</small>' : '') + (clipCount ? ' + ' + clipCount + ' <small>clips</small>' : '');
     el.statMax.innerHTML = layout.effectiveMax + ' <small>CU' + (layout.capped ? ' · limité' : '') + '</small>';
     el.statStl.innerHTML = ready.length + '/' + required.length + ' <small>tailles</small>';
     const man = autoManifests[state.type];
@@ -1670,9 +1777,9 @@
       el.printBadge.className = "badge ok";
       el.printBadge.textContent = "Prêt";
       el.export3mf.disabled = false;
-      el.exportHint.textContent = layout.pieces.length + " plaques" + ((layout.edgePieces || []).length ? " dont " + layout.edgePieces.length + " de bord étendu" : "") + (clipCount ? " + " + clipCount + " clips" : "") + " sur " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+      el.exportHint.textContent = layout.pieces.length + " plaques" + (stackCount ? " en " + stackCount + " pile" + (stackCount > 1 ? "s" : "") : "") + ((layout.edgePieces || []).length ? " dont " + layout.edgePieces.length + " de bord étendu" : "") + (clipCount ? " + " + clipCount + " clips" : "") + " sur " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
       el.autoStatus.className = "alert ok";
-      el.autoStatus.textContent = "Toutes les pièces nécessaires sont chargées" + ((layout.edgePieces || []).length ? " (bords continus inclus)" : "") + (clipCount ? ", avec " + clipCount + " clips " + clipSet.label : "") + ". Le 3MF utilisera " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
+      el.autoStatus.textContent = "Toutes les pièces nécessaires sont chargées" + ((layout.edgePieces || []).length ? " (bords continus inclus)" : "") + (clipCount ? ", avec " + clipCount + " clips " + clipSet.label : "") + (stackCount ? ", empilées en " + stackCount + " pile" + (stackCount > 1 ? "s" : "") : "") + ". Le 3MF utilisera " + pack.bins.length + " plateau" + (pack.bins.length > 1 ? "x" : "") + ".";
     }
 
     let notice = "";
@@ -1687,6 +1794,9 @@
     }
     if (layout.tightGame) {
       notice += " Grille remplie au maximum : le jeu réel (" + round1(Math.min(layout.leftoverW, layout.leftoverD)) + " mm) est inférieur au jeu demandé (" + round1(state.clearance) + " mm).";
+    }
+    if (stackCount) {
+      notice += " Empilement : " + stackCount + " pile" + (stackCount > 1 ? "s" : "") + ", espacement " + round1(state.stackGap) + " mm. Active l'ironing des surfaces supérieures dans Orca/Bambu.";
     }
     el.notice.textContent = notice;
   }
@@ -1739,87 +1849,143 @@
       light2.position.set(2, 1, 2);
       scene.add(light2);
 
+      const stackView = state.printMode === "stack" && lastPack && lastPack.mode === "stack" && !lastPack.error;
+      const W = stackView ? state.bedX : state.width;
+      const D = stackView ? state.bedY : state.depth;
       const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(state.width, state.depth),
+        new THREE.PlaneGeometry(W, D),
         new THREE.MeshStandardMaterial({ color: 0x0f1728, roughness: 1, metalness: 0 })
       );
-      floor.position.set(state.width / 2, state.depth / 2, -0.7);
+      floor.position.set(W / 2, D / 2, -0.7);
       scene.add(floor);
       const grid = [];
-      for (let x = 0; x <= state.width + 0.1; x += 50) grid.push(x, 0, -0.5, x, state.depth, -0.5);
-      for (let y = 0; y <= state.depth + 0.1; y += 50) grid.push(0, y, -0.5, state.width, y, -0.5);
+      for (let x = 0; x <= W + 0.1; x += 50) grid.push(x, 0, -0.5, x, D, -0.5);
+      for (let y = 0; y <= D + 0.1; y += 50) grid.push(0, y, -0.5, W, y, -0.5);
       scene.add(new THREE.LineSegments(
         new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(grid, 3)),
         new THREE.LineBasicMaterial({ color: 0x1d2a42 })
       ));
 
-      let plateTop = 0;
-      lastResult.pieces.forEach(function (p) {
-        const entry = p.ext ? edgeMeshCache.get(edgeKey(p)) : lib.get(sizeKey(p.w, p.h));
-        if (!entry) return;
+      function plateGeometry(entry) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(entry.positions, 3));
         geo.setIndex(new THREE.BufferAttribute(entry.indices, 1));
         geo.computeVertexNormals();
-        const tcol = Math.min(1, Math.max(0, (p.w * p.h - 1) / 35));
-        const color = new THREE.Color().setHSL((208 - 185 * tcol) / 360, (66 + 16 * tcol) / 100, (62 + 4 * tcol) / 100);
-        const material = new THREE.MeshStandardMaterial({ color: color, metalness: 0.1, roughness: 0.68, side: THREE.DoubleSide });
-        const mesh = new THREE.Mesh(geo, material);
-        const bb = entry.bbox;
-        const cx = (bb.min[0] + bb.max[0]) / 2;
-        const cy = (bb.min[1] + bb.max[1]) / 2;
-        const tx = p.ext ? p.ext.xmm + p.ext.wmm / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
-        const ty = p.ext ? p.ext.ymm + p.ext.hmm / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
-        mesh.position.set(tx - cx, ty - cy, -bb.min[2]);
-        plateTop = Math.max(plateTop, bb.max[2] - bb.min[2]);
-        scene.add(mesh);
-      });
+        return geo;
+      }
 
-      if (hasClips) {
-        const clipGeo = new Map();
-        const clipMat = new Map();
+      function plateMaterial(w, h) {
+        const tcol = Math.min(1, Math.max(0, (w * h - 1) / 35));
+        const color = new THREE.Color().setHSL((208 - 185 * tcol) / 360, (66 + 16 * tcol) / 100, (62 + 4 * tcol) / 100);
+        return new THREE.MeshStandardMaterial({ color: color, metalness: 0.1, roughness: 0.68, side: THREE.DoubleSide });
+      }
+
+      function clipMaterials() {
+        const geos = new Map();
+        const mats = new Map();
         CLIP_ORDER.forEach(function (type) {
           const entry = clipMeshCache.get(clipKey(clipSet3d.id, type));
           if (!entry) return;
-          const geo = new THREE.BufferGeometry();
-          geo.setAttribute("position", new THREE.BufferAttribute(entry.positions, 3));
-          geo.setIndex(new THREE.BufferAttribute(entry.indices, 1));
-          geo.computeVertexNormals();
-          clipGeo.set(type, geo);
-          clipMat.set(type, new THREE.MeshStandardMaterial({
+          geos.set(type, plateGeometry(entry));
+          mats.set(type, new THREE.MeshStandardMaterial({
             color: new THREE.Color(CLIP_COLORS[type] || "#94a3b8"),
             metalness: 0.05,
             roughness: 0.55,
             side: THREE.DoubleSide
           }));
         });
-        lastResult.clipPlacements.forEach(function (c) {
-          const entry = clipMeshCache.get(clipKey(clipSet3d.id, c.type));
-          const geo = clipGeo.get(c.type);
-          const mat = clipMat.get(c.type);
-          if (!entry || !geo || !mat) return;
+        return { geos: geos, mats: mats };
+      }
+
+      function addRotatedMesh(geo, mat, bb, tx, ty, zBottom, rot) {
+        const cx = (bb.min[0] + bb.max[0]) / 2;
+        const cy = (bb.min[1] + bb.max[1]) / 2;
+        const rcx = rot ? -cy : cx;
+        const rcy = rot ? cx : cy;
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(tx - rcx, ty - rcy, zBottom - bb.min[2]);
+        mesh.rotation.z = rot ? Math.PI / 2 : 0;
+        scene.add(mesh);
+      }
+
+      if (stackView) {
+        const bin = lastPack.bins[0];
+        const clipR = hasClips ? clipMaterials() : null;
+        if (bin) {
+          bin.items.forEach(function (it) {
+            if (it.item.stack) {
+              const stack = it.item.stack;
+              const tx = state.bedMargin + it.x + it.w / 2;
+              const ty = state.bedMargin + it.y + it.h / 2;
+              let z = 0;
+              stack.items.forEach(function (pi) {
+                const piece = pi.item.piece;
+                const entry = piece.ext ? edgeMeshCache.get(edgeKey(piece)) : lib.get(sizeKey(piece.w, piece.h));
+                if (!entry) return;
+                const rot = pi.rot;
+                addRotatedMesh(plateGeometry(entry), plateMaterial(piece.w, piece.h), entry.bbox, tx, ty, z, rot);
+                z += (entry.bbox.max[2] - entry.bbox.min[2]) + state.stackGap;
+              });
+            } else if (it.item.isClip && clipR) {
+              const entry = clipMeshCache.get(clipKey(clipSet3d.id, it.item.clipType));
+              const geo = clipR.geos.get(it.item.clipType);
+              const mat = clipR.mats.get(it.item.clipType);
+              if (!entry || !geo || !mat) return;
+              const tx = state.bedMargin + it.x + it.w / 2;
+              const ty = state.bedMargin + it.y + it.h / 2;
+              addRotatedMesh(geo, mat, entry.bbox, tx, ty, 0, it.rot);
+            }
+          });
+        }
+        const pts = [new THREE.Vector3(0, 0, 0.05), new THREE.Vector3(W, 0, 0.05), new THREE.Vector3(W, D, 0.05), new THREE.Vector3(0, D, 0.05)];
+        scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5b6b89 })));
+      } else {
+        let plateTop = 0;
+        lastResult.pieces.forEach(function (p) {
+          const entry = p.ext ? edgeMeshCache.get(edgeKey(p)) : lib.get(sizeKey(p.w, p.h));
+          if (!entry) return;
+          const geo = plateGeometry(entry);
+          const material = plateMaterial(p.w, p.h);
+          const mesh = new THREE.Mesh(geo, material);
           const bb = entry.bbox;
           const cx = (bb.min[0] + bb.max[0]) / 2;
           const cy = (bb.min[1] + bb.max[1]) / 2;
-          const halfW = (bb.max[0] - bb.min[0]) / 2;
-          const halfH = (bb.max[1] - bb.min[1]) / 2;
-          const rot = c.rot ? Math.PI / 2 : 0;
-          const ex = rot ? halfH : halfW;
-          const ey = rot ? halfW : halfH;
-          let px = lastResult.offX + c.x * state.unit;
-          let py = lastResult.offY + c.y * state.unit;
-          px = Math.min(state.width - ex, Math.max(ex, px));
-          py = Math.min(state.depth - ey, Math.max(ey, py));
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.set(px - cx, py - cy, plateTop - bb.min[2] + 0.05);
-          mesh.rotation.z = rot;
+          const tx = p.ext ? p.ext.xmm + p.ext.wmm / 2 : lastResult.offX + p.x * state.unit + p.w * state.unit / 2;
+          const ty = p.ext ? p.ext.ymm + p.ext.hmm / 2 : lastResult.offY + p.y * state.unit + p.h * state.unit / 2;
+          mesh.position.set(tx - cx, ty - cy, -bb.min[2]);
+          plateTop = Math.max(plateTop, bb.max[2] - bb.min[2]);
           scene.add(mesh);
         });
-      }
 
-      const W = state.width, D = state.depth;
-      const pts = [new THREE.Vector3(0, 0, 0.05), new THREE.Vector3(W, 0, 0.05), new THREE.Vector3(W, D, 0.05), new THREE.Vector3(0, D, 0.05)];
-      scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5b6b89 })));
+        if (hasClips) {
+          const clipR = clipMaterials();
+          lastResult.clipPlacements.forEach(function (c) {
+            const entry = clipMeshCache.get(clipKey(clipSet3d.id, c.type));
+            const geo = clipR.geos.get(c.type);
+            const mat = clipR.mats.get(c.type);
+            if (!entry || !geo || !mat) return;
+            const bb = entry.bbox;
+            const cx = (bb.min[0] + bb.max[0]) / 2;
+            const cy = (bb.min[1] + bb.max[1]) / 2;
+            const halfW = (bb.max[0] - bb.min[0]) / 2;
+            const halfH = (bb.max[1] - bb.min[1]) / 2;
+            const rot = c.rot ? Math.PI / 2 : 0;
+            const ex = rot ? halfH : halfW;
+            const ey = rot ? halfW : halfH;
+            let px = lastResult.offX + c.x * state.unit;
+            let py = lastResult.offY + c.y * state.unit;
+            px = Math.min(state.width - ex, Math.max(ex, px));
+            py = Math.min(state.depth - ey, Math.max(ey, py));
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(px - cx, py - cy, plateTop - bb.min[2] + 0.05);
+            mesh.rotation.z = rot;
+            scene.add(mesh);
+          });
+        }
+
+        const pts = [new THREE.Vector3(0, 0, 0.05), new THREE.Vector3(W, 0, 0.05), new THREE.Vector3(W, D, 0.05), new THREE.Vector3(0, D, 0.05)];
+        scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5b6b89 })));
+      }
 
       const target = new THREE.Vector3(W / 2, D / 2, 0);
       const startR = Math.max(W, D) * 2.0;
@@ -1871,8 +2037,13 @@
     }
   }
 
+  function syncStackControls() {
+    el.stackGap.disabled = state.printMode !== "stack";
+  }
+
   function update() {
     readInputs();
+    syncStackControls();
     saveState();
     renderType();
     const layout = computeLayout();
@@ -2290,6 +2461,50 @@
 
     pack.bins.forEach(function (bin, binIndex) {
       bin.items.forEach(function (it) {
+        if (it.item.stack) {
+          const stack = it.item.stack;
+          const baseX = it.x;
+          const baseY = it.y;
+          const baseW = it.w;
+          const baseH = it.h;
+          let stackZ = 0;
+          stack.items.forEach(function (pi, layerIndex) {
+            const piece = pi.item.piece;
+            const baseKey = sizeKey(piece.w, piece.h);
+            const key = piece.ext ? edgeKey(piece) : baseKey;
+            const entry = piece.ext ? edgeMeshCache.get(key) : lib.get(baseKey);
+            if (!entry) throw new Error("Plaque non chargée : " + key);
+            if (!meshIndex.has(key)) {
+              meshIndex.set(key, meshes.length + 1);
+              meshes.push({ key: key, entry: entry });
+            }
+            const rot = pi.rot ? 1 : 0;
+            const instW = rot ? pi.item.h : pi.item.w;
+            const instH = rot ? pi.item.w : pi.item.h;
+            instances.push({
+              bin: binIndex,
+              x: baseX + (baseW - instW) / 2,
+              y: baseY + (baseH - instH) / 2,
+              w: instW,
+              h: instH,
+              entry: entry,
+              mesh: meshIndex.get(key),
+              ext: !!piece.ext,
+              rotExplicit: rot,
+              zOffset: stackZ,
+              label: (piece.ext ? baseKey + " + bord" : baseKey) + " · pile " + (layerIndex + 1) + "/" + stack.items.length,
+              wid: 2 + instanceId * 2,
+              identify: instanceId + 1
+            });
+            instanceId++;
+            const entryHeight = entry.bbox.max[2] - entry.bbox.min[2];
+            stackZ += entryHeight + state.stackGap;
+          });
+          if (state.bedZ && stackZ - state.stackGap > state.bedZ + 1e-6) {
+            throw new Error("Pile trop haute : " + round1(stackZ - state.stackGap) + " mm pour un plateau de " + state.bedZ + " mm.");
+          }
+          return;
+        }
         if (it.item.isClip) {
           const type = it.item.clipType;
           const key = clipKey(state.clipType, type);
@@ -2362,7 +2577,8 @@
       const minZ = entry.bbox.min[2];
 
       let rot = 0;
-      if (inst.ext) rot = 0;
+      if (inst.rotExplicit !== undefined) rot = inst.rotExplicit;
+      else if (inst.ext) rot = 0;
       else if (Math.abs(nativeW - inst.w) <= 1.5 && Math.abs(nativeH - inst.h) <= 1.5) rot = 0;
       else if (Math.abs(nativeH - inst.w) <= 1.5 && Math.abs(nativeW - inst.h) <= 1.5) rot = 1;
       else rot = nativeW > nativeH && inst.w < inst.h ? 1 : 0;
@@ -2377,7 +2593,7 @@
         wx = tx - cx;
         wy = ty - cy;
       }
-      const tz = -minZ;
+      const tz = (inst.zOffset || 0) - minZ;
 
       const row = Math.floor(inst.bin / plateCols);
       const col = inst.bin % plateCols;
@@ -2385,7 +2601,7 @@
       const oy = -row * bedY * 1.2;
 
       wrappers.push('<object id="' + inst.wid + '" type="model"><components><component p:path="/3D/Objects/mesh_' + inst.mesh + '.model" objectid="' + inst.mesh + '" p:UUID="' + uuid() + '" transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>');
-      items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(rot, ox + wx, oy + wy, tz) + '" printable="1"/>');
+      items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(rot, ox + wx, oy + wy, tz) + '" printable="1"' + (inst.zOffset ? ' auto_drop="0"' : '') + '/>');
       modelObjects.push('<object id="' + inst.wid + '"><metadata key="name" value="' + xmlEsc(inst.label) + '"/><metadata key="extruder" value="1"/></object>');
       plateMap[inst.bin].push(inst);
     });
@@ -2582,6 +2798,7 @@
     lines.push("Tiroir : " + round1(state.width) + " × " + round1(state.depth) + " mm");
     lines.push("Grille : " + layout.cols + " × " + layout.rows + " CU (" + layout.gridW + " × " + layout.gridH + " mm)");
     lines.push("Type : " + t.label);
+    lines.push("Impression : " + (state.printMode === "stack" ? "empilée (gap " + round1(state.stackGap) + " mm, ironing)" : "plateaux séparés"));
     lines.push("");
     rows.forEach(function (r) {
       lines.push("- " + r.a + "×" + r.b + " CU (" + (r.a * layout.unit) + "×" + (r.b * layout.unit) + " mm) × " + r.count);
@@ -2616,6 +2833,7 @@
         lines.push([state.width, state.depth, t.label, r.a + "x" + r.b, r.a * layout.unit, r.b * layout.unit, r.count].join(sep));
       });
       lines.push("");
+      lines.push(["Impression", state.printMode === "stack" ? "empilée (gap " + round1(state.stackGap) + " mm, ironing)" : "plateaux séparés"].join(sep));
       lines.push(["Total plaques", layout.pieces.length].join(sep));
       const extGroups = groupEdgePieces(layout);
       if (extGroups.length) {
@@ -2693,6 +2911,8 @@
       bedMargin: 5,
       gap: 3,
       autoRotate: true,
+      printMode: "beds",
+      stackGap: 0.2,
       limitToBed: true
     };
     writeInputs();
@@ -2702,7 +2922,7 @@
 
   ["input", "change"].forEach(function (evt) {
     [el.w, el.d, el.clearance, el.maxSize, el.centered, el.symmetric, el.edgeFill, el.clipType,
-     el.bedX, el.bedY, el.bedZ, el.bedMargin, el.gap, el.autoRotate, el.limitToBed].forEach(function (node) {
+     el.bedX, el.bedY, el.bedZ, el.bedMargin, el.gap, el.autoRotate, el.printMode, el.stackGap, el.limitToBed].forEach(function (node) {
       node.addEventListener(evt, update);
     });
   });
