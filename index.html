@@ -1528,6 +1528,15 @@
     return { l: sides.t, r: sides.b, t: sides.r, b: sides.l };
   }
 
+  function applySymSides(sides, sym) {
+    return {
+      l: (sym & 1) ? sides.r : sides.l,
+      r: (sym & 1) ? sides.l : sides.r,
+      t: (sym & 2) ? sides.b : sides.t,
+      b: (sym & 2) ? sides.t : sides.b
+    };
+  }
+
   function extSides(item, sym) {
     let l = item.el, r = item.er, t = item.et, b = item.eb;
     if (sym & 1) { const a = l; l = r; r = a; }
@@ -1541,8 +1550,9 @@
 
   function symToMatch(item, targetPattern, coreRot) {
     const key = extKey(targetPattern);
+    const base = coreRotSides(extSides(item, 0), coreRot);
     for (let sym = 0; sym < 4; sym++) {
-      if (extKey(coreRotSides(extSides(item, sym), coreRot)) === key) return sym;
+      if (extKey(applySymSides(base, sym)) === key) return sym;
     }
     return 0;
   }
@@ -1579,8 +1589,7 @@
           canonical.set(coreKey, target);
         }
         const sym = symToMatch(item, target, coreRot);
-        let sides = extSides(item, sym);
-        sides = coreRotSides(sides, coreRot);
+        const sides = applySymSides(coreRotSides(extSides(item, 0), coreRot), sym);
         const oxCells = Math.round((stack.cw - rcw) / 2);
         const oyCells = Math.round((stack.ch - rch) / 2);
         const dx = (stack.base.gx + oxCells * state.unit) - sides.l;
@@ -2392,8 +2401,8 @@
   function plateMatrix(meshRot, sym) {
     let m0 = 1, m1 = 0, m2 = 0, m3 = 0, m4 = 1, m5 = 0, m6 = 0, m7 = 0, m8 = 1;
     if (meshRot) { m0 = 0; m1 = 1; m3 = -1; m4 = 0; }
-    if (sym & 1) { m0 = -m0; m1 = -m1; }
-    if (sym & 2) { m3 = -m3; m4 = -m4; }
+    if (sym & 1) { m0 = -m0; m3 = -m3; }
+    if (sym & 2) { m1 = -m1; m4 = -m4; }
     return [m0, m1, m2, m3, m4, m5, m6, m7, m8];
   }
 
