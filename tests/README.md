@@ -9,3 +9,5 @@ python3 tools/contact-sheet.py
 ```
 
 The report includes stack grid offsets and physical overhangs per layer.
+
+Note: a `max=6` case can legitimately fail when the base plate plus border exceeds the usable bed area; that is a physical constraint, not a stack/alignment failure.

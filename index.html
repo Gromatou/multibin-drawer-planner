@@ -1498,20 +1498,33 @@
   }
 
   function platePrintItems(layout) {
+    const unit = state.unit;
+    const canonical = new Map();
+    layout.pieces.forEach(function (p) {
+      if (!p.ext) return;
+      const key = sizeKey(p.w, p.h);
+      if (!canonical.has(key)) {
+        canonical.set(key, { left: p.ext.left, right: p.ext.right, top: p.ext.top, bottom: p.ext.bottom });
+      }
+    });
     return layout.pieces.map(function (p, i) {
+      const sides = p.ext ? canonical.get(sizeKey(p.w, p.h)) : null;
+      const printW = sides ? p.w * unit + sides.left + sides.right : p.w * unit;
+      const printH = sides ? p.h * unit + sides.top + sides.bottom : p.h * unit;
       return {
         id: i, a: p.w, b: p.h,
         cw: p.w,
         ch: p.h,
-        w: p.ext ? p.ext.wmm : p.w * state.unit,
-        h: p.ext ? p.ext.hmm : p.h * state.unit,
-        gx: p.ext ? p.ext.left : 0,
-        gy: p.ext ? p.ext.top : 0,
-        el: p.ext ? p.ext.left : 0,
-        er: p.ext ? p.ext.right : 0,
-        et: p.ext ? p.ext.top : 0,
-        eb: p.ext ? p.ext.bottom : 0,
+        w: printW,
+        h: printH,
+        gx: sides ? sides.left : 0,
+        gy: sides ? sides.top : 0,
+        el: sides ? sides.left : 0,
+        er: sides ? sides.right : 0,
+        et: sides ? sides.top : 0,
+        eb: sides ? sides.bottom : 0,
         piece: p,
+        printKey: sides ? edgeKeyFromSides(p.w, p.h, sides) : null,
         thickness: PLATE_THICKNESS[state.type] || 6.2,
         fixed: !!p.ext
       };
@@ -1593,6 +1606,36 @@
       }
     }
     return best;
+  }
+
+  function listLayerPlacements(stack, item, allowRotate) {
+    const unit = state.unit;
+    const candidates = allowRotate ? [0, 1, 2, 3, 4, 5, 6, 7] : [0];
+    const list = [];
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const sym = candidates[ci];
+      const b = transformBounds(coreBounds(item), sym);
+      const rcw = (b.r - b.l) / unit;
+      const rch = (b.b - b.t) / unit;
+      if (rcw > stack.cw + 1e-6 || rch > stack.ch + 1e-6) continue;
+      const rangeX = Math.ceil(stack.cw) + 2;
+      const rangeY = Math.ceil(stack.ch) + 2;
+      const previous = stack.items.length ? stack.items[stack.items.length - 1] : null;
+      const below = previous ? { x: previous.dx, y: previous.dy, w: previous.w, h: previous.h } : { x: 0, y: 0, w: stack.w, h: stack.h };
+      for (let kx = -rangeX; kx <= rangeX; kx++) {
+        for (let ky = -rangeY; ky <= rangeY; ky++) {
+          const cx = stack.coreX + kx * unit;
+          const cy = stack.coreY + ky * unit;
+          const left = cx + b.l, right = cx + b.r;
+          const top = cy + b.t, bottom = cy + b.b;
+          if (left < -1e-6 || right > stack.w + 1e-6 || top < -1e-6 || bottom > stack.h + 1e-6) continue;
+          if (left < below.x - 1e-6 || right > below.x + below.w + 1e-6 || top < below.y - 1e-6 || bottom > below.y + below.h + 1e-6) continue;
+          const score = Math.pow((left + right) / 2 - stack.w / 2, 2) + Math.pow((top + bottom) / 2 - stack.h / 2, 2) + sym * 0.0001 + (kx + ky) * 0.00001;
+          list.push({ sym: sym, dx: left, dy: top, w: right - left, h: bottom - top, gx: -b.l, gy: -b.t, kx: kx, ky: ky, score: score });
+        }
+      }
+    }
+    return list.sort(function (a, b) { return a.score - b.score; });
   }
 
   function layerFromBest(item, best) {
@@ -2089,7 +2132,7 @@
               let z = 0;
               stack.items.forEach(function (pi) {
                 const piece = pi.item.piece;
-                const entry = piece.ext ? edgeMeshCache.get(edgeKey(piece)) : lib.get(sizeKey(piece.w, piece.h));
+                const entry = piece.ext ? edgeMeshCache.get(pi.item.printKey) : lib.get(sizeKey(piece.w, piece.h));
                 if (!entry) return;
                 const pw = pi.w || (pi.coreRot ? pi.item.h : pi.item.w);
                 const ph = pi.h || (pi.coreRot ? pi.item.w : pi.item.h);
@@ -2499,7 +2542,11 @@
 
   function edgeKey(piece) {
     const e = piece.ext;
-    return "edge:" + state.type + ":" + sizeKey(piece.w, piece.h) + ":" + round1(e.left) + "," + round1(e.right) + "," + round1(e.top) + "," + round1(e.bottom);
+    return edgeKeyFromSides(piece.w, piece.h, e);
+  }
+
+  function edgeKeyFromSides(w, h, e) {
+    return "edge:" + state.type + ":" + sizeKey(w, h) + ":" + round1(e.left) + "," + round1(e.right) + "," + round1(e.top) + "," + round1(e.bottom);
   }
 
   async function getPlateByKey(type, key) {
@@ -2655,7 +2702,7 @@
           stack.items.forEach(function (pi, layerIndex) {
             const piece = pi.item.piece;
             const baseKey = sizeKey(piece.w, piece.h);
-            const key = piece.ext ? edgeKey(piece) : baseKey;
+            const key = piece.ext ? pi.item.printKey : baseKey;
             const entry = piece.ext ? edgeMeshCache.get(key) : lib.get(baseKey);
             if (!entry) throw new Error("Plaque non chargée : " + key);
             if (!meshIndex.has(key)) {
@@ -3152,6 +3199,9 @@
     update: update,
     build3mfBlob: build3mfBlob,
     chooseLayerPlacement: chooseLayerPlacement,
+    makeBaseStack: makeBaseStack,
+    layerFromBest: layerFromBest,
+    listLayerPlacements: listLayerPlacements,
     edgeMeshes: edgeMeshCache,
     zipEntries: zipEntries,
     libraries: libraries
