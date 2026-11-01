@@ -1507,6 +1507,10 @@
         h: p.ext ? p.ext.hmm : p.h * state.unit,
         gx: p.ext ? p.ext.left : 0,
         gy: p.ext ? p.ext.top : 0,
+        el: p.ext ? p.ext.left : 0,
+        er: p.ext ? p.ext.right : 0,
+        et: p.ext ? p.ext.top : 0,
+        eb: p.ext ? p.ext.bottom : 0,
         piece: p,
         thickness: PLATE_THICKNESS[state.type] || 6.2,
         fixed: !!p.ext
@@ -1519,23 +1523,69 @@
     return -1;
   }
 
+  function coreRotSides(sides, rot) {
+    if (!rot) return { l: sides.l, r: sides.r, t: sides.t, b: sides.b };
+    return { l: sides.t, r: sides.b, t: sides.r, b: sides.l };
+  }
+
+  function extSides(item, sym) {
+    let l = item.el, r = item.er, t = item.et, b = item.eb;
+    if (sym & 1) { const a = l; l = r; r = a; }
+    if (sym & 2) { const a = t; t = b; b = a; }
+    return { l: l, r: r, t: t, b: b };
+  }
+
+  function extKey(p) {
+    return (p.l > 0.05 ? "1" : "0") + (p.r > 0.05 ? "1" : "0") + (p.t > 0.05 ? "1" : "0") + (p.b > 0.05 ? "1" : "0");
+  }
+
+  function symToMatch(item, targetPattern) {
+    const key = extKey(targetPattern);
+    for (let sym = 0; sym < 4; sym++) {
+      if (extKey(extSides(item, sym)) === key) return sym;
+    }
+    return 0;
+  }
+
   function buildStacks(items, allowRotate, maxHeight, gap) {
     const sorted = items.slice().sort(function (x, y) {
       return (y.cw * y.ch - x.cw * x.ch) || (Math.max(y.cw, y.ch) - Math.max(x.cw, x.ch)) || (Math.min(y.cw, y.ch) - Math.min(x.cw, x.ch));
     });
     const stacks = [];
+    const canonical = new Map();
     for (let i = 0; i < sorted.length; i++) {
       const item = sorted[i];
       let placed = false;
       for (let si = 0; si < stacks.length; si++) {
         const stack = stacks[si];
-        if (stackFit(item, stack) < 0) continue;
+        let coreRot = 0;
+        let rcw = item.cw, rch = item.ch;
+        if (allowRotate && item.cw !== item.ch) {
+          coreRot = 1;
+          rcw = item.ch;
+          rch = item.cw;
+        }
+        if (!(rcw <= stack.cw + 1e-6 && rch <= stack.ch + 1e-6)) {
+          coreRot = 0;
+          rcw = item.cw;
+          rch = item.ch;
+        }
+        if (!(rcw <= stack.cw + 1e-6 && rch <= stack.ch + 1e-6)) continue;
         if (maxHeight && stack.height + gap + item.thickness > maxHeight + 1e-6) continue;
-        const oxCells = Math.round((stack.cw - item.cw) / 2);
-        const oyCells = Math.round((stack.ch - item.ch) / 2);
-        const dx = (stack.base.gx + oxCells * state.unit) - item.gx;
-        const dy = (stack.base.gy + oyCells * state.unit) - item.gy;
-        stack.items.push({ item: item, rot: 0, dx: dx, dy: dy });
+        const coreKey = rcw + "x" + rch;
+        let target = canonical.get(coreKey);
+        if (!target) {
+          target = coreRotSides(extSides(item, 0), coreRot);
+          canonical.set(coreKey, target);
+        }
+        const sym = symToMatch(item, target);
+        let sides = extSides(item, sym);
+        sides = coreRotSides(sides, coreRot);
+        const oxCells = Math.round((stack.cw - rcw) / 2);
+        const oyCells = Math.round((stack.ch - rch) / 2);
+        const dx = (stack.base.gx + oxCells * state.unit) - sides.l;
+        const dy = (stack.base.gy + oyCells * state.unit) - sides.t;
+        stack.items.push({ item: item, rot: 0, sym: sym, coreRot: coreRot, dx: dx, dy: dy, gx: sides.l, gy: sides.t });
         stack.height += gap + item.thickness;
         placed = true;
         break;
@@ -1544,6 +1594,9 @@
       if (maxHeight && item.thickness > maxHeight + 1e-6) {
         return { error: "Plaque " + item.w + "×" + item.h + " mm : épaisseur " + round1(item.thickness) + " mm supérieure à la hauteur du plateau." };
       }
+      const baseSides = extSides(item, 0);
+      const coreKey = item.cw + "x" + item.ch;
+      if (!canonical.has(coreKey)) canonical.set(coreKey, baseSides);
       stacks.push({
         base: item,
         cw: item.cw,
@@ -1551,7 +1604,7 @@
         w: item.w,
         h: item.h,
         height: item.thickness,
-        items: [{ item: item, rot: 0, dx: 0, dy: 0 }]
+        items: [{ item: item, rot: 0, sym: 0, coreRot: 0, dx: 0, dy: 0, gx: baseSides.l, gy: baseSides.t }]
       });
     }
     return { stacks: stacks };
@@ -1925,6 +1978,25 @@
         scene.add(mesh);
       }
 
+      function addPlateMesh(geo, mat, bb, tx, ty, zBottom, rot, sym) {
+        if (!sym) {
+          addRotatedMesh(geo, mat, bb, tx, ty, zBottom, rot);
+          return;
+        }
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.z = rot ? Math.PI / 2 : 0;
+        const inner = new THREE.Group();
+        inner.add(mesh);
+        const outer = new THREE.Group();
+        if (sym & 1) outer.scale.x = -1;
+        if (sym & 2) outer.scale.y = -1;
+        outer.add(inner);
+        outer.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(outer);
+        outer.position.set(tx - (box.min.x + box.max.x) / 2, ty - (box.min.y + box.max.y) / 2, zBottom - box.min.z);
+        scene.add(outer);
+      }
+
       if (stackView) {
         const bin = lastPack.bins[0];
         const clipR = hasClips ? clipMaterials() : null;
@@ -1937,10 +2009,12 @@
                 const piece = pi.item.piece;
                 const entry = piece.ext ? edgeMeshCache.get(edgeKey(piece)) : lib.get(sizeKey(piece.w, piece.h));
                 if (!entry) return;
-                const rot = meshRotFor(entry, pi.item.w, pi.item.h);
-                const tx = state.bedMargin + it.x + (pi.dx || 0) + pi.item.w / 2;
-                const ty = state.bedMargin + it.y + (pi.dy || 0) + pi.item.h / 2;
-                addRotatedMesh(plateGeometry(entry), plateMaterial(piece.w, piece.h), entry.bbox, tx, ty, z, rot);
+                const pw = pi.coreRot ? pi.item.h : pi.item.w;
+                const ph = pi.coreRot ? pi.item.w : pi.item.h;
+                const rot = meshRotFor(entry, pw, ph);
+                const tx = state.bedMargin + it.x + (pi.dx || 0) + pw / 2;
+                const ty = state.bedMargin + it.y + (pi.dy || 0) + ph / 2;
+                addPlateMesh(plateGeometry(entry), plateMaterial(piece.w, piece.h), entry.bbox, tx, ty, z, rot, pi.sym || 0);
                 z += (entry.bbox.max[2] - entry.bbox.min[2]) + state.stackGap;
               });
             } else if (it.item.isClip && clipR) {
@@ -2315,6 +2389,22 @@
     return "1 0 0 0 1 0 0 0 1 " + fmtCoord(tx) + " " + fmtCoord(ty) + " " + fmtCoord(tz);
   }
 
+  function plateMatrix(meshRot, sym) {
+    let m0 = 1, m1 = 0, m2 = 0, m3 = 0, m4 = 1, m5 = 0, m6 = 0, m7 = 0, m8 = 1;
+    if (meshRot) { m0 = 0; m1 = 1; m3 = -1; m4 = 0; }
+    if (sym & 1) { m0 = -m0; m1 = -m1; }
+    if (sym & 2) { m3 = -m3; m4 = -m4; }
+    return [m0, m1, m2, m3, m4, m5, m6, m7, m8];
+  }
+
+  function matrixString(m, tx, ty, tz) {
+    return m.map(function (v) { return fmtCoord(v); }).join(" ") + " " + fmtCoord(tx) + " " + fmtCoord(ty) + " " + fmtCoord(tz);
+  }
+
+  function matrixPoint(m, x, y) {
+    return [m[0] * x + m[3] * y, m[1] * x + m[4] * y];
+  }
+
   let manifoldPromise = null;
   const edgeMeshCache = new Map();
 
@@ -2493,19 +2583,22 @@
               meshIndex.set(key, meshes.length + 1);
               meshes.push({ key: key, entry: entry });
             }
+            const pw = pi.coreRot ? pi.item.h : pi.item.w;
+            const ph = pi.coreRot ? pi.item.w : pi.item.h;
             instances.push({
               bin: binIndex,
               x: baseX + (pi.dx || 0),
               y: baseY + (pi.dy || 0),
-              w: pi.item.w,
-              h: pi.item.h,
+              w: pw,
+              h: ph,
               entry: entry,
               mesh: meshIndex.get(key),
               ext: !!piece.ext,
               direct: true,
               directX: state.bedMargin + baseX + (pi.dx || 0),
               directY: state.bedMargin + baseY + (pi.dy || 0),
-              meshRot: meshRotFor(entry, pi.item.w, pi.item.h),
+              meshRot: meshRotFor(entry, pw, ph),
+              sym: pi.sym || 0,
               zOffset: stackZ,
               label: (piece.ext ? baseKey + " + bord" : baseKey) + " · pile " + (layerIndex + 1) + "/" + stack.items.length,
               wid: 2 + instanceId * 2,
@@ -2587,22 +2680,21 @@
       const entry = inst.entry;
       if (inst.direct) {
         const bb = entry.bbox;
-        const minX = bb.min[0], minY = bb.min[1], maxX = bb.max[0], maxY = bb.max[1];
-        let tx, ty;
-        if (inst.meshRot) {
-          tx = inst.directX + maxY;
-          ty = inst.directY - minX;
-        } else {
-          tx = inst.directX - minX;
-          ty = inst.directY - minY;
-        }
+        const m = plateMatrix(inst.meshRot || 0, inst.sym || 0);
+        let minX = Infinity, minY = Infinity;
+        [[bb.min[0], bb.min[1]], [bb.max[0], bb.min[1]], [bb.max[0], bb.max[1]], [bb.min[0], bb.max[1]]].forEach(function (c) {
+          const p = matrixPoint(m, c[0], c[1]);
+          minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
+        });
+        const tx = inst.directX - minX;
+        const ty = inst.directY - minY;
         const tz = (inst.zOffset || 0) - bb.min[2];
         const row = Math.floor(inst.bin / plateCols);
         const col = inst.bin % plateCols;
         const ox = col * bedX * 1.2;
         const oy = -row * bedY * 1.2;
         wrappers.push('<object id="' + inst.wid + '" type="model"><components><component p:path="/3D/Objects/mesh_' + inst.mesh + '.model" objectid="' + inst.mesh + '" p:UUID="' + uuid() + '" transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>');
-        items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(inst.meshRot, ox + tx, oy + ty, tz) + '" printable="1"' + (inst.zOffset ? ' auto_drop="0"' : '') + '/>');
+        items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + matrixString(m, ox + tx, oy + ty, tz) + '" printable="1"/>');
         modelObjects.push('<object id="' + inst.wid + '"><metadata key="name" value="' + xmlEsc(inst.label) + '"/><metadata key="extruder" value="1"/></object>');
         plateMap[inst.bin].push(inst);
         return;
@@ -2638,7 +2730,7 @@
       const oy = -row * bedY * 1.2;
 
       wrappers.push('<object id="' + inst.wid + '" type="model"><components><component p:path="/3D/Objects/mesh_' + inst.mesh + '.model" objectid="' + inst.mesh + '" p:UUID="' + uuid() + '" transform="1 0 0 0 1 0 0 0 1 0 0 0"/></components></object>');
-      items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(rot, ox + wx, oy + wy, tz) + '" printable="1"' + (inst.zOffset ? ' auto_drop="0"' : '') + '/>');
+      items.push('<item objectid="' + inst.wid + '" p:UUID="' + uuid() + '" transform="' + transformString(rot, ox + wx, oy + wy, tz) + '" printable="1"/>');
       modelObjects.push('<object id="' + inst.wid + '"><metadata key="name" value="' + xmlEsc(inst.label) + '"/><metadata key="extruder" value="1"/></object>');
       plateMap[inst.bin].push(inst);
     });

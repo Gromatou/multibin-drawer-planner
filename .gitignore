@@ -6,3 +6,4 @@ generate-plates.js
 .DS_Store
 *.log
 .local-build/
+tests/out/
